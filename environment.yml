@@ -8,9 +8,9 @@ dependencies:
   - scikit-learn
   - mne
   - joblib
-  - pylsl
   - pyyaml
   - pytest
   - pip
   - pip:
+      - pylsl
       - -e .
