@@ -14,6 +14,7 @@ service.py / Unity.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 import time
@@ -95,6 +96,15 @@ def _make_command_outlet() -> StreamOutlet:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--duration-s",
+        type=float,
+        default=15.0,
+        help="How long to publish loopback samples before summarizing.",
+    )
+    args = parser.parse_args()
+
     setup_logging(REPO_ROOT / "logs", level="INFO")
     logger.info("Bringing up 5 LSL streams (EEG, Markers, Commands, Status, BCI_Proba)")
 
@@ -146,7 +156,7 @@ def main() -> int:
     t_start = time.time()
     next_eeg_t = t_start
     sample_idx = 0
-    while time.time() - t_start < 3.0:
+    while time.time() - t_start < args.duration_s:
         if time.time() >= next_eeg_t:
             block = np.zeros((chunk_n, TOTAL_CHANNELS), dtype=np.float32)
             block[:, 0] = (np.arange(sample_idx, sample_idx + chunk_n) % 256).astype(
