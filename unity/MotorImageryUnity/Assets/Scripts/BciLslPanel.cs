@@ -12,9 +12,9 @@ public class BciLslPanel : MonoBehaviour
     public Button startCalibrationButton;
     public Button shutdownButton;
 
-    private liblsl.StreamInlet statusInlet;
-    private liblsl.StreamInlet probaInlet;
-    private liblsl.StreamOutlet commandOutlet;
+    private StreamInlet statusInlet;
+    private StreamInlet probaInlet;
+    private StreamOutlet commandOutlet;
 
     private readonly string[] statusSample = new string[1];
     private readonly float[] probaSample = new float[2];
@@ -38,15 +38,15 @@ public class BciLslPanel : MonoBehaviour
             rightProbaText.text = "p_right: ---";
         }
 
-        var commandInfo = new liblsl.StreamInfo(
+        var commandInfo = new StreamInfo(
             "UnityCommands",
             "Commands",
             1,
-            liblsl.IRREGULAR_RATE,
-            liblsl.channel_format_t.cf_string,
+            0.0,
+            ChannelFormat.Str,
             "unity_commands"
         );
-        commandOutlet = new liblsl.StreamOutlet(commandInfo);
+        commandOutlet = new StreamOutlet(commandInfo);
 
         if (startCalibrationButton != null)
         {
@@ -80,10 +80,10 @@ public class BciLslPanel : MonoBehaviour
     {
         if (statusInlet == null)
         {
-            var streams = liblsl.ResolveStream("type", "Status", 1, 0.1);
+            var streams = LSL.ResolveStream("type", "Status", 1, 0.1);
             if (streams.Length > 0)
             {
-                statusInlet = new liblsl.StreamInlet(streams[0], 1);
+                statusInlet = new StreamInlet(streams[0], 1);
                 statusInlet.OpenStream(1.0);
                 Debug.Log("Connected to Status stream");
             }
@@ -91,10 +91,10 @@ public class BciLslPanel : MonoBehaviour
 
         if (probaInlet == null)
         {
-            var streams = liblsl.ResolveStream("type", "BCI_Proba", 1, 0.1);
+            var streams = LSL.ResolveStream("type", "BCI_Proba", 1, 0.1);
             if (streams.Length > 0)
             {
-                probaInlet = new liblsl.StreamInlet(streams[0], 1);
+                probaInlet = new StreamInlet(streams[0], 1);
                 probaInlet.OpenStream(1.0);
                 Debug.Log("Connected to BCI_Proba stream");
             }
@@ -139,7 +139,7 @@ public class BciLslPanel : MonoBehaviour
             return;
         }
 
-        commandOutlet.PushSample(new[] { command }, liblsl.LocalClock());
+        commandOutlet.PushSample(new[] { command });
         Debug.Log($"Sent command: {command}");
     }
 
