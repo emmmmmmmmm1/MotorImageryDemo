@@ -85,6 +85,31 @@ python -m apps.service --channels FC5 FC6
 When Unity shows `state:IDLE`, press the `Shutdown` button. The service should
 log `cmd: shutdown {}` and then `service stopped`.
 
+### Calibration markers
+
+`BciLslPanel` publishes a Unity `Markers` stream while Play is running. Pressing
+`StartCalibrationButton` sends:
+
+```text
+start_calibration:subject=pc2_test
+```
+
+Then Unity publishes balanced left/right cue markers plus rest markers:
+
+- left cue: `0`
+- right cue: `1`
+- rest: `99`
+
+The script defaults match `configs/default.yaml`:
+
+- `trialsPerClass`: `20`
+- `cueSeconds`: `1.0`
+- `motorImagerySeconds`: `4.0`
+- `restSeconds`: `2.0`
+
+During a full calibration, the service should report `state:CALIBRATING`,
+`calibration_progress:x/40`, then `state:TRAINING`, and finally `state:READY`.
+
 ## What to commit
 
 Keep these in git:

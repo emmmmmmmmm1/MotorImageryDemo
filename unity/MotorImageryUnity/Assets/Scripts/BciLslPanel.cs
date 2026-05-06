@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,17 +14,31 @@ public class BciLslPanel : MonoBehaviour
     public Button startCalibrationButton;
     public Button shutdownButton;
 
+    [Header("Calibration Markers")]
+    public int trialsPerClass = 20;
+    public float cueSeconds = 1.0f;
+    public float motorImagerySeconds = 4.0f;
+    public float restSeconds = 2.0f;
+    public int leftMarker = 0;
+    public int rightMarker = 1;
+    public int restMarker = 99;
+    public bool shuffleCalibrationTrials = true;
+    public int trialShuffleSeed = 1;
+
     private StreamInlet statusInlet;
     private StreamInlet probaInlet;
     private StreamOutlet commandOutlet;
+    private StreamOutlet markerOutlet;
     private ContinuousResolver statusResolver;
     private ContinuousResolver probaResolver;
 
     private readonly string[] statusSample = new string[1];
     private readonly float[] probaSample = new float[2];
     private readonly string[] commandSample = new string[1];
+    private readonly int[] markerSample = new int[1];
     private string lastStatusMessage = "";
     private float nextResolveAt;
+    private Coroutine calibrationRoutine;
 
     private void Start()
     {
@@ -55,17 +71,24 @@ public class BciLslPanel : MonoBehaviour
         );
         commandOutlet = new StreamOutlet(commandInfo);
 
+        var markerInfo = new StreamInfo(
+            "UnityMarkers",
+            "Markers",
+            1,
+            LSL.LSL.IRREGULAR_RATE,
+            channel_format_t.cf_int32,
+            "unity_markers"
+        );
+        markerOutlet = new StreamOutlet(markerInfo);
+
         if (startCalibrationButton != null)
         {
-            startCalibrationButton.onClick.AddListener(() =>
-            {
-                PushCommand("start_calibration:subject=pc2_test");
-            });
+            startCalibrationButton.onClick.AddListener(StartCalibration);
         }
 
         if (shutdownButton != null)
         {
-            shutdownButton.onClick.AddListener(() => PushCommand("shutdown"));
+            shutdownButton.onClick.AddListener(Shutdown);
         }
 
         TryResolveInlets();
@@ -189,10 +212,102 @@ public class BciLslPanel : MonoBehaviour
         Debug.Log($"Sent command: {command}");
     }
 
+    private void StartCalibration()
+    {
+        if (calibrationRoutine != null)
+        {
+            Debug.LogWarning("Calibration marker sequence is already running.");
+            return;
+        }
+
+        PushCommand("start_calibration:subject=pc2_test");
+        calibrationRoutine = StartCoroutine(PublishCalibrationMarkers());
+    }
+
+    private void Shutdown()
+    {
+        if (calibrationRoutine != null)
+        {
+            StopCoroutine(calibrationRoutine);
+            calibrationRoutine = null;
+        }
+
+        PushCommand("shutdown");
+    }
+
+    private IEnumerator PublishCalibrationMarkers()
+    {
+        var labels = BuildCalibrationLabels();
+        Debug.Log($"Calibration marker sequence started: {labels.Count} cue markers");
+
+        yield return new WaitForSecondsRealtime(cueSeconds);
+
+        for (int index = 0; index < labels.Count; index++)
+        {
+            int label = labels[index];
+            PushMarker(label);
+            Debug.Log($"Calibration cue {index + 1}/{labels.Count}: marker={label}");
+
+            yield return new WaitForSecondsRealtime(motorImagerySeconds);
+
+            PushMarker(restMarker);
+            Debug.Log($"Calibration rest marker={restMarker}");
+
+            yield return new WaitForSecondsRealtime(restSeconds + cueSeconds);
+        }
+
+        Debug.Log("Calibration marker sequence complete.");
+        calibrationRoutine = null;
+    }
+
+    private List<int> BuildCalibrationLabels()
+    {
+        int nPerClass = Mathf.Max(1, trialsPerClass);
+        var labels = new List<int>(nPerClass * 2);
+        for (int i = 0; i < nPerClass; i++)
+        {
+            labels.Add(leftMarker);
+            labels.Add(rightMarker);
+        }
+
+        if (shuffleCalibrationTrials)
+        {
+            var rng = new System.Random(trialShuffleSeed);
+            for (int i = labels.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                int tmp = labels[i];
+                labels[i] = labels[j];
+                labels[j] = tmp;
+            }
+        }
+
+        return labels;
+    }
+
+    private void PushMarker(int marker)
+    {
+        if (markerOutlet == null)
+        {
+            return;
+        }
+
+        markerSample[0] = marker;
+        markerOutlet.push_sample(markerSample, LSL.LSL.local_clock());
+    }
+
     private void OnDestroy()
     {
+        if (calibrationRoutine != null)
+        {
+            StopCoroutine(calibrationRoutine);
+            calibrationRoutine = null;
+        }
+
         statusInlet?.close_stream();
         probaInlet?.close_stream();
+        commandOutlet?.Dispose();
+        markerOutlet?.Dispose();
         statusResolver?.Dispose();
         probaResolver?.Dispose();
     }
