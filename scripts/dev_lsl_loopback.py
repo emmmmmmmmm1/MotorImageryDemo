@@ -33,7 +33,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from bci.logging_setup import setup_logging  # noqa: E402
 from bci.lsl_io import (  # noqa: E402
-    CommandReceiver,
     MarkerReceiver,
     ProbaPublisher,
     StatusPublisher,
@@ -109,8 +108,11 @@ def main() -> int:
 
     rx_marker = MarkerReceiver()
     rx_marker.connect()
-    rx_cmd = CommandReceiver()
-    rx_cmd.connect()
+    cmd_streams = resolve_byprop("source_id", "loopback_commands", timeout=5.0)
+    if not cmd_streams:
+        raise RuntimeError("No LoopbackCommands stream found")
+    cmd_inlet = StreamInlet(cmd_streams[0])
+    cmd_inlet.open_stream(timeout=2.0)
 
     eeg_streams = resolve_byprop("type", "EEG", timeout=5.0)
     eeg_inlet = StreamInlet(
@@ -186,7 +188,8 @@ def main() -> int:
     time.sleep(0.5)
     eeg_samples, eeg_ts = eeg_inlet.pull_chunk(timeout=0.5, max_samples=2048)
     markers = rx_marker.pull()
-    cmds = rx_cmd.pull()
+    cmd_samples, _ = cmd_inlet.pull_chunk(timeout=0.5, max_samples=128)
+    cmds = [str(sample[0]) for sample in cmd_samples]
     status_samples, _ = status_inlet.pull_chunk(timeout=0.5, max_samples=128)
     proba_samples, _ = proba_inlet.pull_chunk(timeout=0.5, max_samples=128)
 
