@@ -17,6 +17,14 @@ public class BciLslPanel : MonoBehaviour
     public Button startRealtimeButton;
     public Button stopRealtimeButton;
 
+    [Header("Calibration Progress")]
+    public RectTransform calibrationProgressTrack;
+    public RectTransform calibrationProgressFill;
+    public TMP_Text calibrationProgressText;
+    public TMP_Text warningText;
+    public Color progressFillColor = new Color(0.35f, 0.85f, 1.0f);
+    public Color warningColor = new Color(1.0f, 0.25f, 0.25f);
+
     [Header("Cue Display")]
     public Color leftCueColor = new Color(0.35f, 0.85f, 1.0f);
     public Color rightCueColor = new Color(1.0f, 0.55f, 0.35f);
@@ -52,13 +60,17 @@ public class BciLslPanel : MonoBehaviour
     private readonly string[] commandSample = new string[1];
     private readonly int[] markerSample = new int[1];
     private string lastStatusMessage = "";
+    private string serviceState = "";
+    private int calibrationProgressTotal = 40;
     private float nextResolveAt;
     private Coroutine calibrationRoutine;
     private const float ProbaTrackWidth = 360.0f;
+    private const float CalibrationTrackWidth = 420.0f;
 
     private void Start()
     {
         EnsureCueText();
+        EnsureCalibrationProgressControls();
         EnsureRealtimeControls();
 
         statusResolver = new ContinuousResolver("type", "Status");
@@ -85,6 +97,7 @@ public class BciLslPanel : MonoBehaviour
             cueText.raycastTarget = false;
         }
         SetCueText("", readyCueColor);
+        SetWarningText("");
 
 
         var commandInfo = new StreamInfo(
@@ -127,7 +140,9 @@ public class BciLslPanel : MonoBehaviour
             stopRealtimeButton.onClick.AddListener(StopRealtime);
         }
 
+        UpdateCalibrationProgress(0, 40);
         UpdateRealtimeIndicator(0.5f, 0.5f);
+        UpdateControlInteractivity();
         TryResolveInlets();
     }
 
@@ -185,7 +200,7 @@ public class BciLslPanel : MonoBehaviour
 
     private void PullStatus()
     {
-        if (statusInlet == null || statusText == null)
+        if (statusInlet == null)
         {
             return;
         }
@@ -196,8 +211,12 @@ public class BciLslPanel : MonoBehaviour
             while ((timestamp = statusInlet.pull_sample(statusSample, 0.0)) != 0.0)
             {
                 string message = statusSample[0];
-                statusText.text = message;
-                statusText.color = message.StartsWith("error:") ? Color.red : Color.white;
+                if (statusText != null)
+                {
+                    statusText.text = message;
+                    statusText.color = message.StartsWith("error:") ? Color.red : Color.white;
+                }
+                HandleStatusMessage(message);
                 if (message != lastStatusMessage)
                 {
                     Debug.Log($"Status stream sample: {message}");
@@ -259,12 +278,11 @@ public class BciLslPanel : MonoBehaviour
         }
 
         PushCommand("start_calibration:subject=pc2_test");
+        serviceState = "CALIBRATING";
+        UpdateCalibrationProgress(0, trialsPerClass * 2);
+        UpdateControlInteractivity();
         SetCueText("GET READY", readyCueColor);
         calibrationRoutine = StartCoroutine(PublishCalibrationMarkers());
-        if (startCalibrationButton != null)
-        {
-            startCalibrationButton.interactable = false;
-        }
     }
 
     private void Shutdown()
@@ -281,7 +299,16 @@ public class BciLslPanel : MonoBehaviour
 
     private void StartRealtime()
     {
+        if (serviceState != "READY")
+        {
+            Debug.LogWarning($"Start Realtime ignored while service state is {serviceState}");
+            UpdateControlInteractivity();
+            return;
+        }
+
         PushCommand("start_realtime");
+        serviceState = "RUNNING";
+        UpdateControlInteractivity();
         SetCueText("REALTIME STARTING", realtimeCueColor);
         if (realtimeHintText != null)
         {
@@ -291,7 +318,16 @@ public class BciLslPanel : MonoBehaviour
 
     private void StopRealtime()
     {
+        if (serviceState != "RUNNING")
+        {
+            Debug.LogWarning($"Stop Realtime ignored while service state is {serviceState}");
+            UpdateControlInteractivity();
+            return;
+        }
+
         PushCommand("stop_realtime");
+        serviceState = "READY";
+        UpdateControlInteractivity();
         SetCueText("REALTIME STOPPED", restCueColor);
         if (realtimeHintText != null)
         {
@@ -325,10 +361,7 @@ public class BciLslPanel : MonoBehaviour
         Debug.Log("Calibration marker sequence complete.");
         SetCueText("WAITING FOR TRAINING", readyCueColor);
         calibrationRoutine = null;
-        if (startCalibrationButton != null)
-        {
-            startCalibrationButton.interactable = true;
-        }
+        UpdateControlInteractivity();
     }
 
     private List<int> BuildCalibrationLabels()
@@ -365,6 +398,113 @@ public class BciLslPanel : MonoBehaviour
 
         markerSample[0] = marker;
         markerOutlet.push_sample(markerSample, LSL.LSL.local_clock());
+    }
+
+    private void HandleStatusMessage(string message)
+    {
+        if (message.StartsWith("state:"))
+        {
+            serviceState = message.Substring("state:".Length).Trim();
+            SetWarningText("");
+            if (serviceState == "CALIBRATING")
+            {
+                UpdateCalibrationProgress(0, trialsPerClass * 2);
+            }
+            UpdateControlInteractivity();
+        }
+        else if (message.StartsWith("calibration_progress:"))
+        {
+            SetWarningText("");
+            if (TryParseCalibrationProgress(message, out int current, out int total))
+            {
+                UpdateCalibrationProgress(current, total);
+            }
+        }
+        else if (message.StartsWith("calibration_done:"))
+        {
+            SetWarningText("");
+            UpdateCalibrationProgress(calibrationProgressTotal, calibrationProgressTotal);
+        }
+        else if (message.StartsWith("error:"))
+        {
+            SetWarningText(message);
+            UpdateControlInteractivity();
+        }
+        else
+        {
+            SetWarningText("");
+        }
+    }
+
+    private void UpdateControlInteractivity()
+    {
+        bool isIdle = serviceState == "IDLE";
+        bool isReady = serviceState == "READY";
+        bool isRunning = serviceState == "RUNNING";
+
+        if (startCalibrationButton != null)
+        {
+            startCalibrationButton.interactable = isIdle && calibrationRoutine == null;
+        }
+
+        if (startRealtimeButton != null)
+        {
+            startRealtimeButton.interactable = isReady;
+        }
+
+        if (stopRealtimeButton != null)
+        {
+            stopRealtimeButton.interactable = isRunning;
+        }
+    }
+
+    private bool TryParseCalibrationProgress(string message, out int current, out int total)
+    {
+        current = 0;
+        total = 0;
+        string payload = message.Substring("calibration_progress:".Length).Trim();
+        string[] parts = payload.Split('/');
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        return int.TryParse(parts[0], out current)
+            && int.TryParse(parts[1], out total)
+            && total > 0;
+    }
+
+    private void UpdateCalibrationProgress(int current, int total)
+    {
+        int safeTotal = Mathf.Max(1, total);
+        int safeCurrent = Mathf.Clamp(current, 0, safeTotal);
+        calibrationProgressTotal = safeTotal;
+        float ratio = Mathf.Clamp01((float)safeCurrent / safeTotal);
+
+        if (calibrationProgressFill != null)
+        {
+            calibrationProgressFill.sizeDelta = new Vector2(
+                CalibrationTrackWidth * ratio,
+                calibrationProgressFill.sizeDelta.y
+            );
+        }
+
+        if (calibrationProgressText != null)
+        {
+            calibrationProgressText.text = $"Calibration {safeCurrent} / {safeTotal}";
+        }
+    }
+
+    private void SetWarningText(string message)
+    {
+        if (warningText == null)
+        {
+            return;
+        }
+
+        warningText.text = message;
+        warningText.color = warningColor;
+        warningText.gameObject.SetActive(!string.IsNullOrEmpty(message));
     }
 
     private void UpdateRealtimeIndicator(float leftProba, float rightProba)
@@ -441,6 +581,50 @@ public class BciLslPanel : MonoBehaviour
         rect.anchorMax = new Vector2(1.0f, 0.65f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
+    }
+
+    private void EnsureCalibrationProgressControls()
+    {
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null)
+        {
+            return;
+        }
+
+        if (calibrationProgressTrack == null)
+        {
+            calibrationProgressTrack = CreateProgressTrack(canvas.transform);
+        }
+
+        if (calibrationProgressFill == null && calibrationProgressTrack != null)
+        {
+            calibrationProgressFill = CreateProgressFill(calibrationProgressTrack);
+        }
+
+        if (calibrationProgressText == null)
+        {
+            calibrationProgressText = CreateRuntimeText(
+                canvas.transform,
+                "CalibrationProgressText",
+                "Calibration 0 / 40",
+                22.0f,
+                new Vector2(0.0f, 255.0f),
+                new Vector2(460.0f, 36.0f)
+            );
+        }
+
+        if (warningText == null)
+        {
+            warningText = CreateRuntimeText(
+                canvas.transform,
+                "WarningText",
+                "",
+                20.0f,
+                new Vector2(0.0f, 190.0f),
+                new Vector2(700.0f, 34.0f)
+            );
+            warningText.color = warningColor;
+        }
     }
 
     private void EnsureRealtimeControls()
@@ -556,6 +740,41 @@ public class BciLslPanel : MonoBehaviour
         rect.sizeDelta = size;
         rect.anchoredPosition = anchoredPosition;
         return tmp;
+    }
+
+    private RectTransform CreateProgressTrack(Transform parent)
+    {
+        var go = new GameObject("CalibrationProgressTrack", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(CalibrationTrackWidth, 18.0f);
+        rect.anchoredPosition = new Vector2(0.0f, 225.0f);
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.20f, 0.20f, 0.20f, 0.85f);
+        image.raycastTarget = false;
+        return rect;
+    }
+
+    private RectTransform CreateProgressFill(Transform parent)
+    {
+        var go = new GameObject("CalibrationProgressFill", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.0f, 0.5f);
+        rect.anchorMax = new Vector2(0.0f, 0.5f);
+        rect.pivot = new Vector2(0.0f, 0.5f);
+        rect.sizeDelta = new Vector2(0.0f, 18.0f);
+        rect.anchoredPosition = Vector2.zero;
+
+        var image = go.AddComponent<Image>();
+        image.color = progressFillColor;
+        image.raycastTarget = false;
+        return rect;
     }
 
     private RectTransform CreateRealtimeTrack(Transform parent)

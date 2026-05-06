@@ -109,6 +109,9 @@ The script defaults match `configs/default.yaml`:
 
 During a full calibration, the service should report `state:CALIBRATING`,
 `calibration_progress:x/40`, then `state:TRAINING`, and finally `state:READY`.
+`BciLslPanel` mirrors `calibration_progress:x/40` into a progress bar and
+`Calibration x / 40` text. `calibration_done:acc=...` fills the bar. `error:*`
+messages are shown in red in the warning text.
 
 Unity also shows the current cue in a large `CueText` overlay. If no `CueText`
 is assigned in the scene, `BciLslPanel` creates one under the Canvas at runtime.
@@ -119,6 +122,18 @@ Expected cue display:
 - `RIGHT`
 - `REST`
 - `WAITING FOR TRAINING`
+
+For a quick progress UI check without running a full calibration, enter Play
+mode and run:
+
+```powershell
+python scripts/dev_status_progress.py
+```
+
+Expected Unity display:
+
+- `Calibration 5 / 40` fills the progress bar to about 12.5%.
+- `error:test_warning` appears in red.
 
 ### Realtime
 
