@@ -120,6 +120,28 @@ Expected cue display:
 - `REST`
 - `WAITING FOR TRAINING`
 
+### Realtime
+
+After calibration reaches `state:READY`, press `Start Realtime`. If no realtime
+buttons are assigned in the scene, `BciLslPanel` creates `Start Realtime` and
+`Stop Realtime` buttons at runtime.
+
+Expected service status:
+
+```text
+state:RUNNING
+realtime_warming_up
+realtime_ready
+```
+
+Expected Unity display:
+
+- `p_left` / `p_right` update continuously.
+- The probability indicator moves left or right with the stronger class.
+
+Press `Stop Realtime` to send `stop_realtime` and return the service to
+`state:READY`.
+
 ## What to commit
 
 Keep these in git:
