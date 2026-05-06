@@ -11,15 +11,29 @@ Current code path:
 - Python service runs on PC2.
 - Emotiv/LSL stream is read by Python service.
 - Current Python receiver supports the EPOC X-shaped stream: 19 total channels,
-  14 EEG channels, then select `FC5 FC6` with `--channels FC5 FC6`.
+  14 EEG channels. You can choose any subset of supported channel names through
+  `configs/default.yaml` or the service `--channels` argument.
 - Do not commit generated `data/`, `bundles/`, or `logs/` files.
+
+Supported EPOC X EEG labels:
+
+```text
+AF3 F7 F3 FC5 T7 P7 O1 O2 P8 T8 FC6 F4 F8 AF4
+```
+
+Channel selection priority:
+
+1. `python -m apps.service --channels ...`
+2. `configs/default.yaml` -> `channels.selection`
+3. `null`, which means use all 14 EEG channels
 
 ## Goal
 
 Finish Phase 8.1 to 8.3:
 
 - Emotiv EEG stream is visible over LSL.
-- `python -m apps.service --channels FC5 FC6` connects to the real stream.
+- `python -m apps.service --channels ...` connects to the real stream with the
+  selected channels.
 - Unity calibration reaches `state:READY`.
 - Pressing `Save Bundle` writes `bundles/pc2_test_*.joblib`.
 - Trial-level GroupKFold accuracy is at least `0.60`.
@@ -99,14 +113,31 @@ conda activate MotorImageryDemo
 python -m apps.service --channels FC5 FC6
 ```
 
+Replace `FC5 FC6` with the channels you want to test. For example:
+
+```powershell
+python -m apps.service --channels F3 F4
+python -m apps.service --channels FC5 FC6
+python -m apps.service
+```
+
+The last command uses `configs/default.yaml`. To set the default there:
+
+```yaml
+channels:
+  selection: ["F3", "F4"]
+```
+
 Expected log near startup:
 
 ```text
-EEGReceiver connected: {... 'n_channels': 2, 'channel_names': ['FC5', 'FC6'], ...}
+EEGReceiver connected: {... 'n_channels': 2, 'channel_names': ['F3', 'F4'], ...}
 MarkerReceiver connected to type=Markers
 CommandReceiver connected to type=Commands
 status: state:IDLE
 ```
+
+The `channel_names` value should match your selected channels.
 
 Important:
 
@@ -142,6 +173,8 @@ cd C:\Users\yuta0\Projects\MotorImageryDemo
 conda activate MotorImageryDemo
 python -m apps.service --channels FC5 FC6
 ```
+
+Use the same channel selection that passed 8.2.
 
 5. Wait until Unity shows:
 
@@ -207,7 +240,7 @@ Record these values:
 
 - `calibration_done:acc=...`
 - headset/contact quality
-- whether FC5/FC6 looked clean in `realTimePlotEmotivLSL.py`
+- whether the selected channels looked clean in `realTimePlotEmotivLSL.py`
 - whether you moved, blinked, or adjusted the headset during trials
 
 Then try one improvement at a time:
