@@ -70,7 +70,12 @@ public class BciLslPanel : MonoBehaviour
             rightProbaText.text = "p_right: ---";
         }
 
-        SetCueText("READY", readyCueColor);
+        if (cueText != null)
+        {
+            cueText.raycastTarget = false;
+        }
+        SetCueText("", readyCueColor);
+
 
         var commandInfo = new StreamInfo(
             "UnityCommands",
@@ -366,6 +371,7 @@ public class BciLslPanel : MonoBehaviour
         cueText.alignment = TextAlignmentOptions.Center;
         cueText.fontSize = 64.0f;
         cueText.fontStyle = FontStyles.Bold;
+        cueText.raycastTarget = false;
 
         var rect = cueText.rectTransform;
         rect.anchorMin = new Vector2(0.0f, 0.35f);
