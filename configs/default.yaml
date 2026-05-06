@@ -1,0 +1,56 @@
+lsl:
+  eeg_stream_type: "EEG"
+  markers_stream: "Markers"
+  commands_stream: "Commands"
+  status_stream: "Status"
+  proba_stream: "BCI_Proba"
+  emotiv:
+    channel_offset: 3
+    expected_total_channels: [7, 19]
+  stall_timeout_s: 2.0
+
+preprocessing:
+  bandpass: [8.0, 30.0]
+  bandpass_order: 4
+  notch_hz: 50.0
+  notch_q: 30.0
+  reference: auto              # auto | car | none
+
+calibration:
+  trials_per_class: 20
+  cue_s: 1.0
+  mi_s: 4.0
+  rest_s: 2.0
+  marker_left: 0
+  marker_right: 1
+  marker_rest: 99
+  sanity:
+    max_abs_uv: 500.0
+    nan_inf_check: true
+
+windowing:
+  window_s: 2.0
+  realtime_stride_ms: 250
+  calib_stride_ms: 500
+
+cv:
+  splitter: group_kfold
+  n_splits: 5
+
+realtime:
+  warmup_s: 2.0
+  smoother:
+    name: ema
+    alpha: 0.3
+  fallback_acc_threshold: 0.6
+
+logging:
+  level: INFO
+  file: logs/service.log
+  max_bytes: 10485760
+  backup_count: 3
+
+paths:
+  bundles_dir: bundles/
+  data_dir: data/
+  logs_dir: logs/

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Project artifacts
+data/
+bundles/
+logs/
+*.npz
+*.joblib
+
+# IDE
+.idea/
+.vscode/
+
+# Claude Code local state
+.claude/
+
+# OS
+.DS_Store
+
+# Local-only docs and reference code
+design_v*.md
+implementation_plan_v*.md
+realTimePlotEmotivLSL.py
+main.py
+
+# Env
+.venv/
+venv/
+.env
