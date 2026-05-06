@@ -15,6 +15,8 @@ public class BciLslPanel : MonoBehaviour
     private StreamInlet statusInlet;
     private StreamInlet probaInlet;
     private StreamOutlet commandOutlet;
+    private ContinuousResolver statusResolver;
+    private ContinuousResolver probaResolver;
 
     private readonly string[] statusSample = new string[1];
     private readonly float[] probaSample = new float[2];
@@ -24,6 +26,9 @@ public class BciLslPanel : MonoBehaviour
 
     private void Start()
     {
+        statusResolver = new ContinuousResolver("type", "Status");
+        probaResolver = new ContinuousResolver("type", "BCI_Proba");
+
         if (statusText != null)
         {
             statusText.text = "state: ---";
@@ -82,24 +87,39 @@ public class BciLslPanel : MonoBehaviour
     {
         if (statusInlet == null)
         {
-            var streams = LSL.LSL.resolve_stream("type", "Status", 1, 0.1);
-            if (streams.Length > 0)
-            {
-                statusInlet = new StreamInlet(streams[0]);
-                statusInlet.open_stream(1.0);
-                Debug.Log("Connected to Status stream");
-            }
+            statusInlet = TryOpenInlet(statusResolver, "Status");
         }
 
         if (probaInlet == null)
         {
-            var streams = LSL.LSL.resolve_stream("type", "BCI_Proba", 1, 0.1);
-            if (streams.Length > 0)
-            {
-                probaInlet = new StreamInlet(streams[0]);
-                probaInlet.open_stream(1.0);
-                Debug.Log("Connected to BCI_Proba stream");
-            }
+            probaInlet = TryOpenInlet(probaResolver, "BCI_Proba");
+        }
+    }
+
+    private StreamInlet TryOpenInlet(ContinuousResolver resolver, string streamType)
+    {
+        if (resolver == null)
+        {
+            return null;
+        }
+
+        var streams = resolver.results();
+        if (streams.Length == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var inlet = new StreamInlet(streams[0]);
+            inlet.open_stream(1.0);
+            Debug.Log($"Connected to {streamType} stream: {streams[0].name()}");
+            return inlet;
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"Could not open {streamType} stream yet: {ex.Message}");
+            return null;
         }
     }
 
@@ -173,5 +193,7 @@ public class BciLslPanel : MonoBehaviour
     {
         statusInlet?.close_stream();
         probaInlet?.close_stream();
+        statusResolver?.Dispose();
+        probaResolver?.Dispose();
     }
 }

@@ -105,6 +105,8 @@ class Service:
         self.cmd_rx: CommandReceiver | None = None
         self.status_pub: StatusPublisher | None = None
         self.proba_pub: ProbaPublisher | None = None
+        self.state_heartbeat_s: float = 1.0
+        self.next_state_heartbeat_t: float = 0.0
 
         # Calibration state (reset per session)
         self.cal_subject: str = "unknown"
@@ -176,6 +178,7 @@ class Service:
 
         self.eeg_rx.start_streaming()
         self._publish_state()
+        self.next_state_heartbeat_t = time.time() + self.state_heartbeat_s
 
     def shutdown(self) -> None:
         if self.eeg_rx is not None:
@@ -196,6 +199,7 @@ class Service:
 
     def tick(self) -> None:
         assert self.cmd_rx is not None
+        self._tick_state_heartbeat()
         for raw_cmd in self.cmd_rx.pull():
             self._handle_command(raw_cmd)
         if self.state == State.CALIBRATING:
@@ -558,6 +562,13 @@ class Service:
 
     def _publish_state(self) -> None:
         self._push_status(f"state:{self.state.value}")
+
+    def _tick_state_heartbeat(self) -> None:
+        now = time.time()
+        if now < self.next_state_heartbeat_t:
+            return
+        self._publish_state()
+        self.next_state_heartbeat_t = now + self.state_heartbeat_s
 
 
 def main() -> int:
