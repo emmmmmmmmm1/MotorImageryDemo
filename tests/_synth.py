@@ -30,6 +30,37 @@ def _trial(
     return mu + beta + noise
 
 
+def make_mi_trial(
+    label: int,
+    n_samples: int,
+    fs: float,
+    n_channels: int,
+    rng: np.random.Generator,
+    high_mu: float = 6.0,
+    low_mu: float = 1.0,
+    beta_amp: float = 1.0,
+    noise_amp: float = 1.5,
+) -> np.ndarray:
+    """Generate a single trial with the requested class spatial pattern.
+
+    Class 0 (left): channel 0 high mu, channel 1 low mu.
+    Class 1 (right): channel 0 low mu, channel 1 high mu.
+    """
+    if label not in (0, 1):
+        raise ValueError(f"label must be 0 or 1, got {label}")
+    neutral_mu = 0.5 * (high_mu + low_mu)
+    out = np.zeros((n_channels, n_samples), dtype=np.float32)
+    for ch in range(n_channels):
+        if ch == 0:
+            mu_amp = high_mu if label == 0 else low_mu
+        elif ch == 1:
+            mu_amp = low_mu if label == 0 else high_mu
+        else:
+            mu_amp = neutral_mu
+        out[ch] = _trial(n_samples, fs, mu_amp, beta_amp, noise_amp, rng)
+    return out
+
+
 def generate_synthetic_mi(
     n_trials_per_class: int = 20,
     fs: float = 128.0,
@@ -50,21 +81,21 @@ def generate_synthetic_mi(
     n_total = 2 * n_trials_per_class
     X = np.zeros((n_total, n_channels, n_samples), dtype=np.float32)
     y = np.zeros(n_total, dtype=np.int64)
-    neutral_mu = 0.5 * (high_mu + low_mu)
 
     idx = 0
     for cls in (0, 1):
         for _ in range(n_trials_per_class):
-            for ch in range(n_channels):
-                if ch == 0:
-                    mu_amp = high_mu if cls == 0 else low_mu
-                elif ch == 1:
-                    mu_amp = low_mu if cls == 0 else high_mu
-                else:
-                    mu_amp = neutral_mu
-                X[idx, ch] = _trial(
-                    n_samples, fs, mu_amp, beta_amp, noise_amp, rng
-                )
+            X[idx] = make_mi_trial(
+                cls,
+                n_samples=n_samples,
+                fs=fs,
+                n_channels=n_channels,
+                rng=rng,
+                high_mu=high_mu,
+                low_mu=low_mu,
+                beta_amp=beta_amp,
+                noise_amp=noise_amp,
+            )
             y[idx] = cls
             idx += 1
 
@@ -94,6 +125,9 @@ def generate_continuous_mi(
     n_total = int(round((t_end - t_start) * fs))
     timestamps = t_start + np.arange(n_total) / fs
 
+    # Background is broadband noise only; trial-shaped MI patterns are
+    # added at each marker so the discriminative signal aligns with the
+    # cue exactly, which is what extract_trials will later carve out.
     raw = rng.standard_normal((n_channels, n_total)).astype(np.float32) * 1.5
 
     n_trial = int(round(trial_len_s * fs))
@@ -101,15 +135,15 @@ def generate_continuous_mi(
         i0 = int(round((t_marker - t_start) * fs))
         if i0 < 0 or i0 + n_trial > n_total:
             continue
-        seg, _ = generate_synthetic_mi(
-            n_trials_per_class=1,
+        if label not in (0, 1):
+            continue
+        chosen = make_mi_trial(
+            label=int(label),
+            n_samples=n_trial,
             fs=fs,
-            trial_len_s=trial_len_s,
             n_channels=n_channels,
-            seed=int(rng.integers(0, 2**31 - 1)),
+            rng=rng,
         )
-        # Pick the trial whose label matches the marker's
-        chosen = seg[0] if (seg.shape[0] >= 1 and label == 0) else seg[-1]
         raw[:, i0 : i0 + n_trial] += chosen
 
     return raw, timestamps
