@@ -16,6 +16,7 @@ public class BciLslPanel : MonoBehaviour
     public Button shutdownButton;
     public Button startRealtimeButton;
     public Button stopRealtimeButton;
+    public Button saveBundleButton;
 
     [Header("Calibration Progress")]
     public RectTransform calibrationProgressTrack;
@@ -138,6 +139,11 @@ public class BciLslPanel : MonoBehaviour
         if (stopRealtimeButton != null)
         {
             stopRealtimeButton.onClick.AddListener(StopRealtime);
+        }
+
+        if (saveBundleButton != null)
+        {
+            saveBundleButton.onClick.AddListener(SaveBundle);
         }
 
         UpdateCalibrationProgress(0, 40);
@@ -335,6 +341,19 @@ public class BciLslPanel : MonoBehaviour
         }
     }
 
+    private void SaveBundle()
+    {
+        if (serviceState != "READY")
+        {
+            Debug.LogWarning($"Save Bundle ignored while service state is {serviceState}");
+            UpdateControlInteractivity();
+            return;
+        }
+
+        PushCommand("save_bundle:subject=pc2_test");
+        SetCueText("SAVING BUNDLE", realtimeCueColor);
+    }
+
     private IEnumerator PublishCalibrationMarkers()
     {
         var labels = BuildCalibrationLabels();
@@ -438,6 +457,12 @@ public class BciLslPanel : MonoBehaviour
             SetWarningText(message);
             UpdateControlInteractivity();
         }
+        else if (message.StartsWith("bundle_saved:"))
+        {
+            SetWarningText("");
+            SetCueText("BUNDLE SAVED", realtimeCueColor);
+            UpdateControlInteractivity();
+        }
         else
         {
             UpdateControlInteractivity();
@@ -463,6 +488,11 @@ public class BciLslPanel : MonoBehaviour
         if (stopRealtimeButton != null)
         {
             stopRealtimeButton.interactable = isRunning;
+        }
+
+        if (saveBundleButton != null)
+        {
+            saveBundleButton.interactable = isReady;
         }
     }
 
@@ -660,6 +690,16 @@ public class BciLslPanel : MonoBehaviour
                 "StopRealtimeButton",
                 "Stop Realtime",
                 new Vector2(120.0f, -250.0f)
+            );
+        }
+
+        if (saveBundleButton == null)
+        {
+            saveBundleButton = CreateRuntimeButton(
+                canvas.transform,
+                "SaveBundleButton",
+                "Save Bundle",
+                new Vector2(0.0f, -315.0f)
             );
         }
 

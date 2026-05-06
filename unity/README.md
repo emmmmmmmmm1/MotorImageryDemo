@@ -113,6 +113,18 @@ During a full calibration, the service should report `state:CALIBRATING`,
 `Calibration x / 40` text. `calibration_done:acc=...` fills the bar. `error:*`
 messages are shown in red in the warning text.
 
+When the service reaches `state:READY`, press `Save Bundle`. Unity sends:
+
+```text
+save_bundle:subject=pc2_test
+```
+
+Expected service status:
+
+```text
+bundle_saved:path=.../bundles/pc2_test_*.joblib
+```
+
 Unity also shows the current cue in a large `CueText` overlay. If no `CueText`
 is assigned in the scene, `BciLslPanel` creates one under the Canvas at runtime.
 Expected cue display:
