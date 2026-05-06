@@ -404,9 +404,17 @@ public class BciLslPanel : MonoBehaviour
     {
         if (message.StartsWith("state:"))
         {
-            serviceState = message.Substring("state:".Length).Trim();
-            SetWarningText("");
-            if (serviceState == "CALIBRATING")
+            string nextState = message.Substring("state:".Length).Trim();
+            bool enteredCalibration = serviceState != "CALIBRATING"
+                && nextState == "CALIBRATING";
+            bool changedState = serviceState != nextState;
+
+            serviceState = nextState;
+            if (changedState)
+            {
+                SetWarningText("");
+            }
+            if (enteredCalibration)
             {
                 UpdateCalibrationProgress(0, trialsPerClass * 2);
             }
@@ -432,7 +440,7 @@ public class BciLslPanel : MonoBehaviour
         }
         else
         {
-            SetWarningText("");
+            UpdateControlInteractivity();
         }
     }
 
