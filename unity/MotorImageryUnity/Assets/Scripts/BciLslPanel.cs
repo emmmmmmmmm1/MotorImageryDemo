@@ -11,8 +11,15 @@ public class BciLslPanel : MonoBehaviour
     public TMP_Text statusText;
     public TMP_Text leftProbaText;
     public TMP_Text rightProbaText;
+    public TMP_Text cueText;
     public Button startCalibrationButton;
     public Button shutdownButton;
+
+    [Header("Cue Display")]
+    public Color leftCueColor = new Color(0.35f, 0.85f, 1.0f);
+    public Color rightCueColor = new Color(1.0f, 0.55f, 0.35f);
+    public Color restCueColor = new Color(0.8f, 0.8f, 0.8f);
+    public Color readyCueColor = Color.white;
 
     [Header("Calibration Markers")]
     public int trialsPerClass = 20;
@@ -42,6 +49,8 @@ public class BciLslPanel : MonoBehaviour
 
     private void Start()
     {
+        EnsureCueText();
+
         statusResolver = new ContinuousResolver("type", "Status");
         probaResolver = new ContinuousResolver("type", "BCI_Proba");
 
@@ -60,6 +69,8 @@ public class BciLslPanel : MonoBehaviour
         {
             rightProbaText.text = "p_right: ---";
         }
+
+        SetCueText("READY", readyCueColor);
 
         var commandInfo = new StreamInfo(
             "UnityCommands",
@@ -221,7 +232,12 @@ public class BciLslPanel : MonoBehaviour
         }
 
         PushCommand("start_calibration:subject=pc2_test");
+        SetCueText("GET READY", readyCueColor);
         calibrationRoutine = StartCoroutine(PublishCalibrationMarkers());
+        if (startCalibrationButton != null)
+        {
+            startCalibrationButton.interactable = false;
+        }
     }
 
     private void Shutdown()
@@ -232,6 +248,7 @@ public class BciLslPanel : MonoBehaviour
             calibrationRoutine = null;
         }
 
+        SetCueText("SHUTDOWN", restCueColor);
         PushCommand("shutdown");
     }
 
@@ -245,11 +262,13 @@ public class BciLslPanel : MonoBehaviour
         for (int index = 0; index < labels.Count; index++)
         {
             int label = labels[index];
+            SetCueForMarker(label);
             PushMarker(label);
             Debug.Log($"Calibration cue {index + 1}/{labels.Count}: marker={label}");
 
             yield return new WaitForSecondsRealtime(motorImagerySeconds);
 
+            SetCueText("REST", restCueColor);
             PushMarker(restMarker);
             Debug.Log($"Calibration rest marker={restMarker}");
 
@@ -257,7 +276,12 @@ public class BciLslPanel : MonoBehaviour
         }
 
         Debug.Log("Calibration marker sequence complete.");
+        SetCueText("WAITING FOR TRAINING", readyCueColor);
         calibrationRoutine = null;
+        if (startCalibrationButton != null)
+        {
+            startCalibrationButton.interactable = true;
+        }
     }
 
     private List<int> BuildCalibrationLabels()
@@ -296,12 +320,71 @@ public class BciLslPanel : MonoBehaviour
         markerOutlet.push_sample(markerSample, LSL.LSL.local_clock());
     }
 
+    private void SetCueForMarker(int marker)
+    {
+        if (marker == leftMarker)
+        {
+            SetCueText("LEFT", leftCueColor);
+        }
+        else if (marker == rightMarker)
+        {
+            SetCueText("RIGHT", rightCueColor);
+        }
+        else
+        {
+            SetCueText($"MARKER {marker}", readyCueColor);
+        }
+    }
+
+    private void SetCueText(string text, Color color)
+    {
+        if (cueText == null)
+        {
+            return;
+        }
+
+        cueText.text = text;
+        cueText.color = color;
+    }
+
+    private void EnsureCueText()
+    {
+        if (cueText != null)
+        {
+            return;
+        }
+
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null)
+        {
+            return;
+        }
+
+        var go = new GameObject("CueText", typeof(RectTransform));
+        go.transform.SetParent(canvas.transform, false);
+        cueText = go.AddComponent<TextMeshProUGUI>();
+        cueText.alignment = TextAlignmentOptions.Center;
+        cueText.fontSize = 64.0f;
+        cueText.fontStyle = FontStyles.Bold;
+
+        var rect = cueText.rectTransform;
+        rect.anchorMin = new Vector2(0.0f, 0.35f);
+        rect.anchorMax = new Vector2(1.0f, 0.65f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
     private void OnDestroy()
     {
         if (calibrationRoutine != null)
         {
             StopCoroutine(calibrationRoutine);
             calibrationRoutine = null;
+        }
+
+        if (startCalibrationButton != null)
+        {
+            startCalibrationButton.interactable = true;
         }
 
         statusInlet?.close_stream();

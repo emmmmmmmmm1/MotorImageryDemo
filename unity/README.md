@@ -110,6 +110,16 @@ The script defaults match `configs/default.yaml`:
 During a full calibration, the service should report `state:CALIBRATING`,
 `calibration_progress:x/40`, then `state:TRAINING`, and finally `state:READY`.
 
+Unity also shows the current cue in a large `CueText` overlay. If no `CueText`
+is assigned in the scene, `BciLslPanel` creates one under the Canvas at runtime.
+Expected cue display:
+
+- `GET READY`
+- `LEFT`
+- `RIGHT`
+- `REST`
+- `WAITING FOR TRAINING`
+
 ## What to commit
 
 Keep these in git:
