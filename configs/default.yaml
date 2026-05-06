@@ -6,8 +6,16 @@ lsl:
   proba_stream: "BCI_Proba"
   emotiv:
     channel_offset: 3
-    expected_total_channels: [7, 19]
+    # Only EPOC X (19-channel total stream, 14 EEG) is supported.
+    expected_total_channels: [19]
   stall_timeout_s: 2.0
+
+channels:
+  # null = use all 14 EPOC X channels.
+  # Set to a list of names (subset of [AF3, F7, F3, FC5, T7, P7, O1,
+  # O2, P8, T8, FC6, F4, F8, AF4]) to restrict the decoder to those
+  # channels.
+  selection: null
 
 preprocessing:
   bandpass: [8.0, 30.0]
