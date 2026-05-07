@@ -1,4 +1,4 @@
-# Phase 8 PC2 Instructions
+# Phase 8 Two-PC Instructions
 
 Phase 8 is the first real Emotiv calibration pass. Phase 7 proved the Unity,
 Python service, LSL command/status/probability streams, and bundle saving work
@@ -8,8 +8,12 @@ stream and confirm calibration can finish with an acceptable CV score.
 Current code path:
 
 - Unity runs on PC2.
-- Python service runs on PC2.
-- Emotiv/LSL stream is read by Python service.
+- Emotiv app and Python service run on PC1.
+- Emotiv/LSL stream is read by Python service on PC1.
+- Unity on PC2 publishes `Markers` and `Commands` over LSL.
+- Python service on PC1 publishes `Status` and `BCI_Proba` over LSL.
+- PC1 and PC2 must be on the same LAN, and the OS firewall must allow LSL,
+  Python, and Unity network traffic on both machines.
 - Current Python receiver supports the EPOC X-shaped stream: 19 total channels,
   14 EEG channels. You can choose any subset of supported channel names through
   `configs/default.yaml` or the service `--channels` argument.
@@ -41,6 +45,15 @@ Finish Phase 8.1 to 8.3:
 If accuracy is below `0.60`, Phase 8.4 starts.
 
 ## Before Starting
+
+On PC1:
+
+```bash
+cd /Users/yutayamamura/Projects/MotorImageryDemo
+git pull
+conda activate MotorImageryDemo
+pytest -q
+```
 
 On PC2:
 
@@ -80,9 +93,9 @@ Only commit source/config files. Do not commit:
 1. Start the Emotiv app that exposes LSL.
 2. Wear the headset and confirm signal quality is stable.
 3. Enable the EEG LSL outlet in the Emotiv app.
-4. In PC2 terminal:
+4. In PC1 terminal:
 
-```powershell
+```bash
 conda activate MotorImageryDemo
 python realTimePlotEmotivLSL.py
 ```
@@ -104,18 +117,20 @@ If this script cannot find the stream:
 ## 8.2 Python Service Connection Check
 
 Keep the Emotiv LSL stream running.
+Start Unity Play on PC2 first, so the Unity `Markers` and `Commands` LSL
+streams are already available.
 
-In a terminal on PC2:
+In a terminal on PC1:
 
-```powershell
-cd C:\Users\yuta0\Projects\MotorImageryDemo
+```bash
+cd /Users/yutayamamura/Projects/MotorImageryDemo
 conda activate MotorImageryDemo
 python -m apps.service --channels FC5 FC6
 ```
 
 Replace `FC5 FC6` with the channels you want to test. For example:
 
-```powershell
+```bash
 python -m apps.service --channels F3 F4
 python -m apps.service --channels FC5 FC6
 python -m apps.service
@@ -142,19 +157,21 @@ The `channel_names` value should match your selected channels.
 Important:
 
 - If it says `No LSL stream of type='Markers'`, start Unity Play first, then
-  rerun the service.
+  rerun the service on PC1. If Unity is already in Play mode, check firewall and
+  make sure PC1 and PC2 are on the same network.
 - If it says `No LSL stream of type='Commands'`, start Unity Play first, then
-  rerun the service.
+  rerun the service on PC1. If Unity is already in Play mode, check firewall and
+  make sure PC1 and PC2 are on the same network.
 - If it says the EEG layout is unexpected, copy the full `EEGReceiver connected`
   or error log and stop. The receiver code may need to support that Emotiv
   stream layout before calibration.
 
 ## 8.3 Real Calibration With Unity
 
-Use two PC2 windows:
+Use:
 
-- Unity Editor
-- PowerShell terminal running `apps.service`
+- PC2: Unity Editor
+- PC1: Terminal running `apps.service`
 
 Steps:
 
@@ -166,10 +183,10 @@ C:\Users\yuta0\Projects\MotorImageryDemo\unity\MotorImageryUnity
 
 2. Open `Assets/MainMenu.unity`.
 3. Press Play in Unity.
-4. Start the service after Unity Play is active:
+4. Start the service on PC1 after Unity Play is active:
 
-```powershell
-cd C:\Users\yuta0\Projects\MotorImageryDemo
+```bash
+cd /Users/yutayamamura/Projects/MotorImageryDemo
 conda activate MotorImageryDemo
 python -m apps.service --channels FC5 FC6
 ```
@@ -207,13 +224,13 @@ Expected service log:
 
 ```text
 cmd: save_bundle {'subject': 'pc2_test'}
-status: bundle_saved:path=C:\Users\yuta0\Projects\MotorImageryDemo\bundles\pc2_test_YYYYMMDDTHHMMSSZ.joblib
+status: bundle_saved:path=/Users/yutayamamura/Projects/MotorImageryDemo/bundles/pc2_test_YYYYMMDDTHHMMSSZ.joblib
 ```
 
-10. Confirm the bundle exists:
+10. Confirm the bundle exists on PC1:
 
-```powershell
-dir bundles\pc2_test_*.joblib
+```bash
+ls bundles/pc2_test_*.joblib
 ```
 
 ## Pass Criteria
