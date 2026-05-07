@@ -1,4 +1,4 @@
-# Unity Phase 6
+# Unity BCI UI
 
 Expected Unity project path:
 
@@ -6,17 +6,23 @@ Expected Unity project path:
 unity/MotorImageryUnity
 ```
 
-The Phase 6 bridge script lives at:
+The main scene is:
 
 ```text
-unity/MotorImageryUnity/Assets/Scripts/BciLslPanel.cs
+unity/MotorImageryUnity/Assets/MainMenu.unity
 ```
 
-## Fresh PC setup
+For the two-PC Emotiv flow, see:
+
+```text
+docs/phase8_two_pc_instructions.md
+```
+
+## Fresh PC Setup
 
 This repo is meant to be portable across PCs. Commit Unity source/config files,
-then let each PC regenerate its own `Library`, `Temp`, `UserSettings`, `.csproj`,
-and `.slnx` files.
+then let each PC regenerate its own `Library`, `Temp`, `UserSettings`,
+`.csproj`, and `.slnx` files.
 
 1. Install Unity `6000.4.5f1` or open the project with a compatible Unity 6
    editor.
@@ -27,43 +33,55 @@ and `.slnx` files.
 5. Confirm LSL4Unity is installed. If Package Manager did not restore it, add:
    `https://github.com/labstreaminglayer/LSL4Unity.git`
 6. Open `Assets/MainMenu.unity`.
-7. Confirm `BciLslPanel` is attached to `Canvas` and these fields are assigned:
-   - `StatusText`
-   - `LeftProbaText`
-   - `RightProbaText`
-   - `StartCalibrationButton`
-   - `ShutdownButton`
+7. Confirm `BciLslPanel` is attached to `Canvas`.
 8. Press Play once and check that the Unity Console has no red compile errors.
 
-## Smoke tests
+Python and conda are not required to edit or run the Unity scene by itself.
+They are required on whichever PC runs `apps.service` or the fake LSL scripts.
 
-Run from the repository root in a `MotorImageryDemo` conda environment.
+## Script Roles
 
-### Screens
+The runtime UI is scene-authored. The scripts should not create replacement UI
+at Play time.
 
-`BciLslPanel` keeps one LSL connection alive and switches between runtime UI
-panels:
+- `BciLslPanel.cs`: thin wiring component on the Canvas. It resolves scene UI
+  references and passes them to the focused controllers.
+- `BciLslStreams.cs`: LSL transport. It publishes `Commands` and `Markers`,
+  and subscribes to `Status` and `BCI_Proba`.
+- `BciScreenNavigator.cs`: screen switching between Main Menu, Calibration,
+  and Realtime panels.
+- `BciCalibrationController.cs`: subject ID, `Start Calibration`, marker
+  sequence, calibration progress, warnings, `Save Model`, and `Shutdown`.
+- `BciRealtimeController.cs`: `Start Realtime`, `Stop Realtime`, probability
+  text, and the realtime probability indicator.
 
-- Main Menu
-- Calibration
-- Realtime
+## Editing UI
 
-Use the Main Menu buttons to move into Calibration or Realtime. Use each
-screen's `Back` button to return to the Main Menu. Keeping this in one Unity
-scene avoids tearing down the LSL outlets/inlets during navigation.
+The editable UI lives in `Assets/MainMenu.unity`.
 
-These panels are saved in `Assets/MainMenu.unity`, so their layout can be edited
-in Unity Edit Mode and committed normally. If the editable UI needs to be
-rebuilt, use Unity's menu item:
+- Edit layout in Unity Edit Mode, not Play Mode.
+- `CalibrationPanel` and `RealtimePanel` are scene objects. If a panel is
+  inactive, select it in the Hierarchy and enable it temporarily in the
+  Inspector while editing.
+- Save the scene after layout changes.
+- Commit `Assets/MainMenu.unity` when the layout should be shared with other
+  PCs.
+
+If the editable UI needs to be rebuilt from the project default, use:
 
 ```text
 Motor Imagery > Rebuild Editable Main Menu UI
 ```
 
-The runtime fallback in `BciLslPanel` remains as a safety net for missing
-references, but normal layout edits should be made on the scene objects.
+That rebuild action recreates the panels, so use it only when you are okay with
+overwriting manual layout edits.
 
-### BCI_Proba display
+## Smoke Tests
+
+Run Python commands from the repository root in a `MotorImageryDemo` conda
+environment.
+
+### BCI_Proba Display
 
 Start Unity Play, then run:
 
@@ -84,7 +102,7 @@ p_left: 0.xxx
 p_right: 0.xxx
 ```
 
-### Commands button
+### Commands Button
 
 Terminal 1:
 
@@ -106,13 +124,14 @@ Terminal 3:
 python -m apps.service --channels FC5 FC6
 ```
 
-When Unity shows `state:IDLE`, press the `Shutdown` button. The service should
-log `cmd: shutdown {}` and then `service stopped`.
+When Unity shows `state:IDLE`, press `Shutdown`. The service should log
+`cmd: shutdown {}` and then `service stopped`.
 
-### Calibration markers
+### Calibration
 
-`BciLslPanel` publishes a Unity `Markers` stream while Play is running. Enter a
-Subject ID on the Calibration screen, then press `StartCalibrationButton`.
+`BciLslStreams` publishes a Unity `Markers` stream while Play is running. Enter
+a Subject ID on the Calibration screen, then press `Start Calibration`.
+
 Unity sends:
 
 ```text
@@ -122,24 +141,17 @@ start_calibration:subject=S001
 Use simple IDs such as `S001` or `subject_001`; spaces are converted to
 underscores.
 
-Then Unity publishes balanced left/right cue markers plus rest markers:
+Unity then publishes balanced left/right cue markers plus rest markers:
 
 - left cue: `0`
 - right cue: `1`
 - rest: `99`
 
-The script defaults match `configs/default.yaml`:
-
-- `trialsPerClass`: `20`
-- `cueSeconds`: `1.0`
-- `motorImagerySeconds`: `4.0`
-- `restSeconds`: `2.0`
-
 During a full calibration, the service should report `state:CALIBRATING`,
 `calibration_progress:x/40`, then `state:TRAINING`, and finally `state:READY`.
-`BciLslPanel` mirrors `calibration_progress:x/40` into a progress bar and
-`Calibration x / 40` text. `calibration_done:acc=...` fills the bar. `error:*`
-messages are shown in red in the warning text.
+`BciCalibrationController` mirrors `calibration_progress:x/40` into a progress
+bar and `Calibration x / 40` text. `calibration_done:acc=...` fills the bar.
+`error:*` messages are shown in red in the warning text.
 
 When the service reaches `state:READY`, press `Save Model`. Unity sends:
 
@@ -152,16 +164,6 @@ Expected service status:
 ```text
 bundle_saved:path=.../bundles/S001_*.joblib
 ```
-
-Unity also shows the current cue in a large `CueText` overlay. If no `CueText`
-is assigned in the scene, `BciLslPanel` creates one under the Canvas at runtime.
-Expected cue display:
-
-- `GET READY`
-- `LEFT`
-- `RIGHT`
-- `REST`
-- `WAITING FOR TRAINING`
 
 For a quick progress UI check without running a full calibration, enter Play
 mode and run:
@@ -177,9 +179,7 @@ Expected Unity display:
 
 ### Realtime
 
-After calibration reaches `state:READY`, press `Start Realtime`. If no realtime
-buttons are assigned in the scene, `BciLslPanel` creates `Start Realtime` and
-`Stop Realtime` buttons at runtime.
+After calibration reaches `state:READY`, press `Start Realtime`.
 
 Expected service status:
 
@@ -197,7 +197,13 @@ Expected Unity display:
 Press `Stop Realtime` to send `stop_realtime` and return the service to
 `state:READY`.
 
-## What to commit
+## Two-PC Notes
+
+For PC1 Emotiv plus PC2 Unity testing, keep the detailed checklist in
+`docs/phase8_two_pc_instructions.md`. That file includes the expected command
+order, channel selection examples, and the firewall/LSL troubleshooting path.
+
+## What To Commit
 
 Keep these in git:
 
@@ -205,6 +211,7 @@ Keep these in git:
 - `Packages/manifest.json`
 - `Packages/packages-lock.json`
 - `ProjectSettings/`
+- `docs/`
 
 Do not commit generated/local files:
 
