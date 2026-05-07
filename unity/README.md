@@ -39,6 +39,19 @@ and `.slnx` files.
 
 Run from the repository root in a `MotorImageryDemo` conda environment.
 
+### Screens
+
+`BciLslPanel` keeps one LSL connection alive and switches between runtime UI
+panels:
+
+- Main Menu
+- Calibration
+- Realtime
+
+Use the Main Menu buttons to move into Calibration or Realtime. Use each
+screen's `Back` button to return to the Main Menu. Keeping this in one Unity
+scene avoids tearing down the LSL outlets/inlets during navigation.
+
 ### BCI_Proba display
 
 Start Unity Play, then run:
@@ -87,12 +100,16 @@ log `cmd: shutdown {}` and then `service stopped`.
 
 ### Calibration markers
 
-`BciLslPanel` publishes a Unity `Markers` stream while Play is running. Pressing
-`StartCalibrationButton` sends:
+`BciLslPanel` publishes a Unity `Markers` stream while Play is running. Enter a
+Subject ID on the Calibration screen, then press `StartCalibrationButton`.
+Unity sends:
 
 ```text
-start_calibration:subject=pc2_test
+start_calibration:subject=S001
 ```
+
+Use simple IDs such as `S001` or `subject_001`; spaces are converted to
+underscores.
 
 Then Unity publishes balanced left/right cue markers plus rest markers:
 
@@ -113,16 +130,16 @@ During a full calibration, the service should report `state:CALIBRATING`,
 `Calibration x / 40` text. `calibration_done:acc=...` fills the bar. `error:*`
 messages are shown in red in the warning text.
 
-When the service reaches `state:READY`, press `Save Bundle`. Unity sends:
+When the service reaches `state:READY`, press `Save Model`. Unity sends:
 
 ```text
-save_bundle:subject=pc2_test
+save_bundle:subject=S001
 ```
 
 Expected service status:
 
 ```text
-bundle_saved:path=.../bundles/pc2_test_*.joblib
+bundle_saved:path=.../bundles/S001_*.joblib
 ```
 
 Unity also shows the current cue in a large `CueText` overlay. If no `CueText`

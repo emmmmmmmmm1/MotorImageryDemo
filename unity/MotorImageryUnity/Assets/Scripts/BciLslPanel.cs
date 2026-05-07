@@ -18,6 +18,16 @@ public class BciLslPanel : MonoBehaviour
     public Button stopRealtimeButton;
     public Button saveBundleButton;
 
+    [Header("Screens")]
+    public RectTransform mainMenuPanel;
+    public RectTransform calibrationPanel;
+    public RectTransform realtimePanel;
+    public Button menuCalibrationButton;
+    public Button menuRealtimeButton;
+    public Button backToMenuFromCalibrationButton;
+    public Button backToMenuFromRealtimeButton;
+    public TMP_InputField subjectIdInput;
+
     [Header("Calibration Progress")]
     public RectTransform calibrationProgressTrack;
     public RectTransform calibrationProgressFill;
@@ -62,6 +72,7 @@ public class BciLslPanel : MonoBehaviour
     private readonly int[] markerSample = new int[1];
     private string lastStatusMessage = "";
     private string serviceState = "";
+    private string currentSubjectId = "pc2_test";
     private int calibrationProgressTotal = 40;
     private float nextResolveAt;
     private Coroutine calibrationRoutine;
@@ -70,9 +81,12 @@ public class BciLslPanel : MonoBehaviour
 
     private void Start()
     {
+        EnsureScreenPanels();
         EnsureCueText();
         EnsureCalibrationProgressControls();
         EnsureRealtimeControls();
+        EnsureMainMenuControls();
+        EnsureCalibrationActionControls();
 
         statusResolver = new ContinuousResolver("type", "Status");
         probaResolver = new ContinuousResolver("type", "BCI_Proba");
@@ -146,8 +160,35 @@ public class BciLslPanel : MonoBehaviour
             saveBundleButton.onClick.AddListener(SaveBundle);
         }
 
+        if (menuCalibrationButton != null)
+        {
+            menuCalibrationButton.onClick.AddListener(ShowCalibrationScreen);
+        }
+
+        if (menuRealtimeButton != null)
+        {
+            menuRealtimeButton.onClick.AddListener(ShowRealtimeScreen);
+        }
+
+        if (backToMenuFromCalibrationButton != null)
+        {
+            backToMenuFromCalibrationButton.onClick.AddListener(ShowMainMenu);
+        }
+
+        if (backToMenuFromRealtimeButton != null)
+        {
+            backToMenuFromRealtimeButton.onClick.AddListener(ShowMainMenu);
+        }
+
+        if (subjectIdInput != null)
+        {
+            subjectIdInput.text = currentSubjectId;
+            subjectIdInput.onEndEdit.AddListener(UpdateSubjectIdFromInput);
+        }
+
         UpdateCalibrationProgress(0, 40);
         UpdateRealtimeIndicator(0.5f, 0.5f);
+        ShowMainMenu();
         UpdateControlInteractivity();
         TryResolveInlets();
     }
@@ -283,7 +324,8 @@ public class BciLslPanel : MonoBehaviour
             return;
         }
 
-        PushCommand("start_calibration:subject=pc2_test");
+        currentSubjectId = GetSubjectId();
+        PushCommand($"start_calibration:subject={currentSubjectId}");
         serviceState = "CALIBRATING";
         UpdateCalibrationProgress(0, trialsPerClass * 2);
         UpdateControlInteractivity();
@@ -350,8 +392,80 @@ public class BciLslPanel : MonoBehaviour
             return;
         }
 
-        PushCommand("save_bundle:subject=pc2_test");
+        currentSubjectId = GetSubjectId();
+        PushCommand($"save_bundle:subject={currentSubjectId}");
         SetCueText("SAVING BUNDLE", realtimeCueColor);
+    }
+
+    private void ShowMainMenu()
+    {
+        SetScreenActive(mainMenuPanel, true);
+        SetScreenActive(calibrationPanel, false);
+        SetScreenActive(realtimePanel, false);
+    }
+
+    private void ShowCalibrationScreen()
+    {
+        SetScreenActive(mainMenuPanel, false);
+        SetScreenActive(calibrationPanel, true);
+        SetScreenActive(realtimePanel, false);
+    }
+
+    private void ShowRealtimeScreen()
+    {
+        SetScreenActive(mainMenuPanel, false);
+        SetScreenActive(calibrationPanel, false);
+        SetScreenActive(realtimePanel, true);
+    }
+
+    private void SetScreenActive(RectTransform panel, bool active)
+    {
+        if (panel != null)
+        {
+            panel.gameObject.SetActive(active);
+        }
+    }
+
+    private void UpdateSubjectIdFromInput(string value)
+    {
+        currentSubjectId = SanitizeSubjectId(value);
+        if (subjectIdInput != null && subjectIdInput.text != currentSubjectId)
+        {
+            subjectIdInput.SetTextWithoutNotify(currentSubjectId);
+        }
+    }
+
+    private string GetSubjectId()
+    {
+        if (subjectIdInput != null)
+        {
+            UpdateSubjectIdFromInput(subjectIdInput.text);
+        }
+        return currentSubjectId;
+    }
+
+    private string SanitizeSubjectId(string raw)
+    {
+        string value = (raw ?? "").Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            return "pc2_test";
+        }
+
+        var chars = new List<char>(value.Length);
+        foreach (char ch in value)
+        {
+            if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '-')
+            {
+                chars.Add(ch);
+            }
+            else if (char.IsWhiteSpace(ch))
+            {
+                chars.Add('_');
+            }
+        }
+
+        return chars.Count == 0 ? "pc2_test" : new string(chars.ToArray());
     }
 
     private IEnumerator PublishCalibrationMarkers()
@@ -593,10 +707,165 @@ public class BciLslPanel : MonoBehaviour
         cueText.color = color;
     }
 
+    private void EnsureScreenPanels()
+    {
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null)
+        {
+            return;
+        }
+
+        if (mainMenuPanel == null)
+        {
+            mainMenuPanel = CreateScreenPanel(canvas.transform, "MainMenuPanel");
+        }
+
+        if (calibrationPanel == null)
+        {
+            calibrationPanel = CreateScreenPanel(canvas.transform, "CalibrationPanel");
+        }
+
+        if (realtimePanel == null)
+        {
+            realtimePanel = CreateScreenPanel(canvas.transform, "RealtimePanel");
+        }
+    }
+
+    private RectTransform CreateScreenPanel(Transform parent, string objectName)
+    {
+        var go = new GameObject(objectName, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        return rect;
+    }
+
+    private void EnsureMainMenuControls()
+    {
+        var parent = mainMenuPanel != null ? mainMenuPanel.transform : transform;
+
+        CreateRuntimeText(
+            parent,
+            "MainMenuTitle",
+            "Motor Imagery BCI",
+            42.0f,
+            new Vector2(0.0f, 160.0f),
+            new Vector2(620.0f, 70.0f)
+        );
+
+        if (menuCalibrationButton == null)
+        {
+            menuCalibrationButton = CreateRuntimeButton(
+                parent,
+                "MenuCalibrationButton",
+                "Calibration",
+                new Vector2(0.0f, 55.0f)
+            );
+        }
+
+        if (menuRealtimeButton == null)
+        {
+            menuRealtimeButton = CreateRuntimeButton(
+                parent,
+                "MenuRealtimeButton",
+                "Realtime",
+                new Vector2(0.0f, -15.0f)
+            );
+        }
+
+        if (shutdownButton != null)
+        {
+            ReparentAndPlace(shutdownButton.transform as RectTransform, parent, new Vector2(0.0f, -110.0f));
+        }
+    }
+
+    private void EnsureCalibrationActionControls()
+    {
+        var parent = calibrationPanel != null ? calibrationPanel.transform : transform;
+
+        CreateRuntimeText(
+            parent,
+            "CalibrationTitle",
+            "Calibration",
+            34.0f,
+            new Vector2(0.0f, 315.0f),
+            new Vector2(520.0f, 52.0f)
+        );
+
+        CreateRuntimeText(
+            parent,
+            "SubjectIdLabel",
+            "Subject ID",
+            20.0f,
+            new Vector2(-210.0f, 275.0f),
+            new Vector2(160.0f, 34.0f)
+        );
+
+        if (subjectIdInput == null)
+        {
+            subjectIdInput = CreateRuntimeInputField(
+                parent,
+                "SubjectIdInput",
+                currentSubjectId,
+                new Vector2(45.0f, 275.0f),
+                new Vector2(300.0f, 42.0f)
+            );
+        }
+
+        if (startCalibrationButton == null)
+        {
+            startCalibrationButton = CreateRuntimeButton(
+                parent,
+                "StartCalibrationButton",
+                "Start Calibration",
+                new Vector2(0.0f, 110.0f)
+            );
+        }
+        else
+        {
+            ReparentAndPlace(startCalibrationButton.transform as RectTransform, parent, new Vector2(0.0f, 110.0f));
+        }
+
+        if (saveBundleButton == null)
+        {
+            saveBundleButton = CreateRuntimeButton(
+                parent,
+                "SaveBundleButton",
+                "Save Model",
+                new Vector2(0.0f, -255.0f)
+            );
+        }
+        else
+        {
+            ReparentAndPlace(saveBundleButton.transform as RectTransform, parent, new Vector2(0.0f, -255.0f));
+        }
+
+        if (backToMenuFromCalibrationButton == null)
+        {
+            backToMenuFromCalibrationButton = CreateRuntimeButton(
+                parent,
+                "BackToMenuFromCalibrationButton",
+                "Back",
+                new Vector2(0.0f, -325.0f)
+            );
+        }
+        else
+        {
+            ReparentAndPlace(backToMenuFromCalibrationButton.transform as RectTransform, parent, new Vector2(0.0f, -325.0f));
+        }
+    }
+
     private void EnsureCueText()
     {
         if (cueText != null)
         {
+            if (calibrationPanel != null)
+            {
+                ReparentAndPlace(cueText.rectTransform, calibrationPanel.transform, Vector2.zero);
+            }
             return;
         }
 
@@ -606,8 +875,9 @@ public class BciLslPanel : MonoBehaviour
             return;
         }
 
+        var parent = calibrationPanel != null ? calibrationPanel.transform : canvas.transform;
         var go = new GameObject("CueText", typeof(RectTransform));
-        go.transform.SetParent(canvas.transform, false);
+        go.transform.SetParent(parent, false);
         cueText = go.AddComponent<TextMeshProUGUI>();
         cueText.alignment = TextAlignmentOptions.Center;
         cueText.fontSize = 64.0f;
@@ -628,10 +898,15 @@ public class BciLslPanel : MonoBehaviour
         {
             return;
         }
+        var parent = calibrationPanel != null ? calibrationPanel.transform : canvas.transform;
 
         if (calibrationProgressTrack == null)
         {
-            calibrationProgressTrack = CreateProgressTrack(canvas.transform);
+            calibrationProgressTrack = CreateProgressTrack(parent);
+        }
+        else
+        {
+            ReparentAndPlace(calibrationProgressTrack, parent, new Vector2(0.0f, 45.0f));
         }
 
         if (calibrationProgressFill == null && calibrationProgressTrack != null)
@@ -642,26 +917,34 @@ public class BciLslPanel : MonoBehaviour
         if (calibrationProgressText == null)
         {
             calibrationProgressText = CreateRuntimeText(
-                canvas.transform,
+                parent,
                 "CalibrationProgressText",
                 "Calibration 0 / 40",
                 22.0f,
-                new Vector2(0.0f, 255.0f),
+                new Vector2(0.0f, 75.0f),
                 new Vector2(460.0f, 36.0f)
             );
+        }
+        else
+        {
+            ReparentAndPlace(calibrationProgressText.rectTransform, parent, new Vector2(0.0f, 75.0f));
         }
 
         if (warningText == null)
         {
             warningText = CreateRuntimeText(
-                canvas.transform,
+                parent,
                 "WarningText",
                 "",
                 20.0f,
-                new Vector2(0.0f, 190.0f),
+                new Vector2(0.0f, 5.0f),
                 new Vector2(700.0f, 34.0f)
             );
             warningText.color = warningColor;
+        }
+        else
+        {
+            ReparentAndPlace(warningText.rectTransform, parent, new Vector2(0.0f, 5.0f));
         }
     }
 
@@ -672,40 +955,43 @@ public class BciLslPanel : MonoBehaviour
         {
             return;
         }
+        var parent = realtimePanel != null ? realtimePanel.transform : canvas.transform;
 
         if (startRealtimeButton == null)
         {
             startRealtimeButton = CreateRuntimeButton(
-                canvas.transform,
+                parent,
                 "StartRealtimeButton",
                 "Start Realtime",
                 new Vector2(-120.0f, -250.0f)
             );
         }
+        else
+        {
+            ReparentAndPlace(startRealtimeButton.transform as RectTransform, parent, new Vector2(-120.0f, -250.0f));
+        }
 
         if (stopRealtimeButton == null)
         {
             stopRealtimeButton = CreateRuntimeButton(
-                canvas.transform,
+                parent,
                 "StopRealtimeButton",
                 "Stop Realtime",
                 new Vector2(120.0f, -250.0f)
             );
         }
-
-        if (saveBundleButton == null)
+        else
         {
-            saveBundleButton = CreateRuntimeButton(
-                canvas.transform,
-                "SaveBundleButton",
-                "Save Bundle",
-                new Vector2(0.0f, -315.0f)
-            );
+            ReparentAndPlace(stopRealtimeButton.transform as RectTransform, parent, new Vector2(120.0f, -250.0f));
         }
 
         if (probaIndicatorTrack == null)
         {
-            probaIndicatorTrack = CreateRealtimeTrack(canvas.transform);
+            probaIndicatorTrack = CreateRealtimeTrack(parent);
+        }
+        else
+        {
+            ReparentAndPlace(probaIndicatorTrack, parent, new Vector2(0.0f, -210.0f));
         }
 
         if (probaIndicatorThumb == null && probaIndicatorTrack != null)
@@ -716,12 +1002,44 @@ public class BciLslPanel : MonoBehaviour
         if (realtimeHintText == null)
         {
             realtimeHintText = CreateRuntimeText(
-                canvas.transform,
+                parent,
                 "RealtimeHintText",
                 "Realtime idle",
                 24.0f,
                 new Vector2(0.0f, -175.0f),
                 new Vector2(420.0f, 44.0f)
+            );
+        }
+        else
+        {
+            ReparentAndPlace(realtimeHintText.rectTransform, parent, new Vector2(0.0f, -175.0f));
+        }
+
+        if (leftProbaText != null)
+        {
+            ReparentAndPlace(leftProbaText.rectTransform, parent, new Vector2(-140.0f, 120.0f));
+        }
+
+        if (rightProbaText != null)
+        {
+            ReparentAndPlace(rightProbaText.rectTransform, parent, new Vector2(140.0f, 120.0f));
+        }
+
+        if (backToMenuFromRealtimeButton == null)
+        {
+            backToMenuFromRealtimeButton = CreateRuntimeButton(
+                parent,
+                "BackToMenuFromRealtimeButton",
+                "Back",
+                new Vector2(0.0f, -325.0f)
+            );
+        }
+        else
+        {
+            ReparentAndPlace(
+                backToMenuFromRealtimeButton.transform as RectTransform,
+                parent,
+                new Vector2(0.0f, -325.0f)
             );
         }
     }
@@ -790,6 +1108,75 @@ public class BciLslPanel : MonoBehaviour
         return tmp;
     }
 
+    private TMP_InputField CreateRuntimeInputField(
+        Transform parent,
+        string objectName,
+        string text,
+        Vector2 anchoredPosition,
+        Vector2 size
+    )
+    {
+        var go = new GameObject(objectName, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = size;
+        rect.anchoredPosition = anchoredPosition;
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.08f, 0.08f, 0.08f, 0.92f);
+
+        var input = go.AddComponent<TMP_InputField>();
+        input.targetGraphic = image;
+
+        var textGo = new GameObject("Text", typeof(RectTransform));
+        textGo.transform.SetParent(go.transform, false);
+        var textRect = textGo.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(12.0f, 4.0f);
+        textRect.offsetMax = new Vector2(-12.0f, -4.0f);
+        var textComponent = textGo.AddComponent<TextMeshProUGUI>();
+        textComponent.fontSize = 20.0f;
+        textComponent.alignment = TextAlignmentOptions.MidlineLeft;
+        textComponent.color = Color.white;
+        textComponent.raycastTarget = false;
+
+        var placeholderGo = new GameObject("Placeholder", typeof(RectTransform));
+        placeholderGo.transform.SetParent(go.transform, false);
+        var placeholderRect = placeholderGo.GetComponent<RectTransform>();
+        placeholderRect.anchorMin = Vector2.zero;
+        placeholderRect.anchorMax = Vector2.one;
+        placeholderRect.offsetMin = new Vector2(12.0f, 4.0f);
+        placeholderRect.offsetMax = new Vector2(-12.0f, -4.0f);
+        var placeholder = placeholderGo.AddComponent<TextMeshProUGUI>();
+        placeholder.text = "S001";
+        placeholder.fontSize = 20.0f;
+        placeholder.alignment = TextAlignmentOptions.MidlineLeft;
+        placeholder.color = new Color(1.0f, 1.0f, 1.0f, 0.45f);
+        placeholder.raycastTarget = false;
+
+        input.textComponent = textComponent;
+        input.placeholder = placeholder;
+        input.text = text;
+        return input;
+    }
+
+    private void ReparentAndPlace(RectTransform rect, Transform parent, Vector2 anchoredPosition)
+    {
+        if (rect == null || parent == null)
+        {
+            return;
+        }
+
+        rect.SetParent(parent, false);
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = anchoredPosition;
+    }
+
     private RectTransform CreateProgressTrack(Transform parent)
     {
         var go = new GameObject("CalibrationProgressTrack", typeof(RectTransform));
@@ -799,7 +1186,7 @@ public class BciLslPanel : MonoBehaviour
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.sizeDelta = new Vector2(CalibrationTrackWidth, 18.0f);
-        rect.anchoredPosition = new Vector2(0.0f, 225.0f);
+        rect.anchoredPosition = new Vector2(0.0f, 45.0f);
 
         var image = go.AddComponent<Image>();
         image.color = new Color(0.20f, 0.20f, 0.20f, 0.85f);
