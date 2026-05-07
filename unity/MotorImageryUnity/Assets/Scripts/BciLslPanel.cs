@@ -717,17 +717,20 @@ public class BciLslPanel : MonoBehaviour
 
         if (mainMenuPanel == null)
         {
-            mainMenuPanel = CreateScreenPanel(canvas.transform, "MainMenuPanel");
+            mainMenuPanel = FindRectTransform(canvas.transform, "MainMenuPanel")
+                ?? CreateScreenPanel(canvas.transform, "MainMenuPanel");
         }
 
         if (calibrationPanel == null)
         {
-            calibrationPanel = CreateScreenPanel(canvas.transform, "CalibrationPanel");
+            calibrationPanel = FindRectTransform(canvas.transform, "CalibrationPanel")
+                ?? CreateScreenPanel(canvas.transform, "CalibrationPanel");
         }
 
         if (realtimePanel == null)
         {
-            realtimePanel = CreateScreenPanel(canvas.transform, "RealtimePanel");
+            realtimePanel = FindRectTransform(canvas.transform, "RealtimePanel")
+                ?? CreateScreenPanel(canvas.transform, "RealtimePanel");
         }
     }
 
@@ -747,7 +750,7 @@ public class BciLslPanel : MonoBehaviour
     {
         var parent = mainMenuPanel != null ? mainMenuPanel.transform : transform;
 
-        CreateRuntimeText(
+        EnsureNamedRuntimeText(
             parent,
             "MainMenuTitle",
             "Motor Imagery BCI",
@@ -786,7 +789,7 @@ public class BciLslPanel : MonoBehaviour
     {
         var parent = calibrationPanel != null ? calibrationPanel.transform : transform;
 
-        CreateRuntimeText(
+        EnsureNamedRuntimeText(
             parent,
             "CalibrationTitle",
             "Calibration",
@@ -795,7 +798,7 @@ public class BciLslPanel : MonoBehaviour
             new Vector2(520.0f, 52.0f)
         );
 
-        CreateRuntimeText(
+        EnsureNamedRuntimeText(
             parent,
             "SubjectIdLabel",
             "Subject ID",
@@ -813,6 +816,10 @@ public class BciLslPanel : MonoBehaviour
                 new Vector2(45.0f, 275.0f),
                 new Vector2(300.0f, 42.0f)
             );
+        }
+        else
+        {
+            ReparentAndPlace(subjectIdInput.transform as RectTransform, parent, new Vector2(45.0f, 275.0f));
         }
 
         if (startCalibrationButton == null)
@@ -1108,6 +1115,28 @@ public class BciLslPanel : MonoBehaviour
         return tmp;
     }
 
+    private TMP_Text EnsureNamedRuntimeText(
+        Transform parent,
+        string objectName,
+        string text,
+        float fontSize,
+        Vector2 anchoredPosition,
+        Vector2 size
+    )
+    {
+        Transform existing = parent.Find(objectName);
+        if (existing != null && existing.TryGetComponent(out TMP_Text tmp))
+        {
+            ReparentAndPlace(tmp.rectTransform, parent, anchoredPosition);
+            tmp.text = text;
+            tmp.fontSize = fontSize;
+            tmp.rectTransform.sizeDelta = size;
+            return tmp;
+        }
+
+        return CreateRuntimeText(parent, objectName, text, fontSize, anchoredPosition, size);
+    }
+
     private TMP_InputField CreateRuntimeInputField(
         Transform parent,
         string objectName,
@@ -1175,6 +1204,12 @@ public class BciLslPanel : MonoBehaviour
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = anchoredPosition;
+    }
+
+    private RectTransform FindRectTransform(Transform parent, string objectName)
+    {
+        Transform child = parent.Find(objectName);
+        return child != null ? child as RectTransform : null;
     }
 
     private RectTransform CreateProgressTrack(Transform parent)

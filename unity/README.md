@@ -52,6 +52,17 @@ Use the Main Menu buttons to move into Calibration or Realtime. Use each
 screen's `Back` button to return to the Main Menu. Keeping this in one Unity
 scene avoids tearing down the LSL outlets/inlets during navigation.
 
+These panels are saved in `Assets/MainMenu.unity`, so their layout can be edited
+in Unity Edit Mode and committed normally. If the editable UI needs to be
+rebuilt, use Unity's menu item:
+
+```text
+Motor Imagery > Rebuild Editable Main Menu UI
+```
+
+The runtime fallback in `BciLslPanel` remains as a safety net for missing
+references, but normal layout edits should be made on the scene objects.
+
 ### BCI_Proba display
 
 Start Unity Play, then run:
