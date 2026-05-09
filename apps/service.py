@@ -46,7 +46,10 @@ from bci.lsl_io import (  # noqa: E402
     StatusPublisher,
 )
 from bci.models.csp_lda import CSPLDADecoder  # noqa: E402
-from bci.models.registry import build as build_decoder  # noqa: E402
+from bci.models.registry import (  # noqa: E402
+    build as build_decoder,
+    list_available,
+)
 from bci.pipeline import InferencePipeline  # noqa: E402
 from bci.preprocessing import Preprocessor  # noqa: E402
 from bci.smoother import make_smoother  # noqa: E402
@@ -178,6 +181,9 @@ class Service:
 
         self.eeg_rx.start_streaming()
         self._publish_state()
+        self._push_status(
+            f"decoders_available:{','.join(list_available())}"
+        )
         self.next_state_heartbeat_t = time.time() + self.state_heartbeat_s
 
     def shutdown(self) -> None:
@@ -217,7 +223,10 @@ class Service:
             if name == "shutdown":
                 self.shutdown_requested = True
             elif name == "start_calibration":
-                self._cmd_start_calibration(kwargs.get("subject", "unknown"))
+                self._cmd_start_calibration(
+                    kwargs.get("subject", "unknown"),
+                    decoder=kwargs.get("decoder"),
+                )
             elif name == "abort_calibration":
                 self._cmd_abort_calibration()
             elif name == "save_bundle":
@@ -238,10 +247,17 @@ class Service:
     # ------------------------------------------------------------------
     # CALIBRATING
     # ------------------------------------------------------------------
-    def _cmd_start_calibration(self, subject: str) -> None:
+    def _cmd_start_calibration(
+        self, subject: str, decoder: str | None = None
+    ) -> None:
         if self.state != State.IDLE:
             self._push_status(f"error:bad_state:{self.state.value}")
             return
+        if decoder is not None:
+            if decoder not in list_available():
+                self._push_status(f"error:unknown_decoder:{decoder}")
+                return
+            self.decoder_name = decoder
         assert self.eeg_rx is not None
         self.cal_subject = subject
         self.cal_trial_onsets = []
@@ -582,6 +598,14 @@ def main() -> int:
         default=None,
         help="EEG channel names to subset (default: all 14)",
     )
+    parser.add_argument(
+        "--decoder",
+        default=None,
+        help=(
+            "Decoder name (overrides config). "
+            f"Available: {','.join(list_available())}"
+        ),
+    )
     args = parser.parse_args()
 
     setup_logging(REPO_ROOT / "logs", level="INFO")
@@ -589,7 +613,22 @@ def main() -> int:
     channels = args.channels or cfg.get("channels", {}).get("selection")
     if channels in (None, [], "null"):
         channels = None
-    svc = Service(cfg=cfg, channels=channels)
+
+    dec_cfg = cfg.get("decoder", {}) or {}
+    decoder_name = args.decoder or dec_cfg.get("name", "csp_lda")
+    decoder_params = dec_cfg.get("params", {"n_components": 4})
+    if decoder_name not in list_available():
+        parser.error(
+            f"unknown decoder: {decoder_name!r}. "
+            f"available: {list_available()}"
+        )
+
+    svc = Service(
+        cfg=cfg,
+        channels=channels,
+        decoder_name=decoder_name,
+        decoder_params=decoder_params,
+    )
 
     def _on_signal(signum, frame):  # noqa: ANN001
         logger.info("signal %d -> shutdown", signum)

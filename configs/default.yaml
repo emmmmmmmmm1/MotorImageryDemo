@@ -45,6 +45,11 @@ cv:
   splitter: group_kfold
   n_splits: 5
 
+decoder:
+  name: csp_lda
+  params:
+    n_components: 4
+
 realtime:
   warmup_s: 2.0
   smoother:
