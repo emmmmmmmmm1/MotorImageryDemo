@@ -1,0 +1,16 @@
+[project]
+name = "bci-motor-imagery-demo"
+version = "0.1.0"
+description = "Emotiv (LSL) -> Python inference -> Unity BCI motor imagery decoder"
+requires-python = ">=3.10,<3.11"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["bci*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
