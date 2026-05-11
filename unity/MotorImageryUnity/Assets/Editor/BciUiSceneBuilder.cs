@@ -12,7 +12,7 @@ public static class BciUiSceneBuilder
     public static void RebuildEditableMainMenuUi()
     {
         var scene = EditorSceneManager.OpenScene(MainMenuScenePath, OpenSceneMode.Single);
-        var canvas = Object.FindFirstObjectByType<Canvas>();
+        var canvas = Object.FindAnyObjectByType<Canvas>();
         if (canvas == null)
         {
             var canvasGo = new GameObject("Canvas", typeof(RectTransform));
