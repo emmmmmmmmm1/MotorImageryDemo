@@ -12,14 +12,14 @@ from pyriemann.utils.base import invsqrtm
 from pyriemann.utils.mean import mean_covariance
 
 if __package__ in (None, ""):
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
     from bci.models.base import BaseDecoder
     from bci.models.registry import register
 else:
-    from .base import BaseDecoder
-    from .registry import register
+    from ..base import BaseDecoder
+    from ..registry import register
 
 
 @register("riemannian_recenter")
