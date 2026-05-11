@@ -45,7 +45,7 @@ from bci.lsl_io import (  # noqa: E402
     ProbaPublisher,
     StatusPublisher,
 )
-from bci.models.csp_lda import CSPLDADecoder  # noqa: E402
+from bci.models.csp_lda.decoder import CSPLDADecoder  # noqa: E402
 from bci.models.registry import (  # noqa: E402
     build as build_decoder,
     list_available,

@@ -10,17 +10,18 @@ from pyriemann.estimation import Covariances
 from sklearn.pipeline import make_pipeline
 
 if __package__ in (None, ""):
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
     from bci.models.base import BaseDecoder
     from bci.models.registry import register
 else:
-    from .base import BaseDecoder
-    from .registry import register
+    from ..base import BaseDecoder
+    from ..registry import register
 
 try:
-    from mfacc import MFACC, ADCSP
+    from .mean_field_acc import MFACC
+    from .mean_field_acc_utils import ADCSP
 except Exception:  # pragma: no cover - optional dependency
     MFACC = None  # type: ignore
     ADCSP = None  # type: ignore
@@ -75,7 +76,7 @@ class ADCSPMFDecoder(BaseDecoder):
         except Exception:
             self.classes_ = None
         return self
-    
+
     # predict class labels for new data
     def predict(self, X: np.ndarray) -> np.ndarray:
         if self.pipeline is None:
@@ -85,7 +86,7 @@ class ADCSPMFDecoder(BaseDecoder):
                 f"X must be (n_trials, n_channels, n_samples); got shape {X.shape}"
             )
         return np.asarray(self.pipeline.predict(X.astype(np.float64)))
-    
+
     # predict class probabilities for new data. If the final estimator does not
     # support predict_proba, fallback to one-hot encoding of predictions.
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
@@ -106,7 +107,7 @@ class ADCSPMFDecoder(BaseDecoder):
             idx = int(np.where(classes == p)[0][0])
             proba[i, idx] = 1.0
         return proba
-    
+
     # get current parameters as a dictionary
     def get_params(self) -> dict[str, Any]:
         return {
@@ -114,7 +115,7 @@ class ADCSPMFDecoder(BaseDecoder):
             "adcsp_modes": list(self.adcsp_modes),
             "mfacc_kwargs": dict(self.mfacc_kwargs),
         }
-    
+
     # set parameters from a dictionary and reset pipeline and classes
     def set_params(self, params: dict[str, Any]) -> None:
         if "cov_estimator" in params:

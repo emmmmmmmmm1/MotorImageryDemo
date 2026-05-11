@@ -6,8 +6,8 @@ import numpy as np
 from mne.decoding import CSP
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-from .base import BaseDecoder
-from .registry import register
+from ..base import BaseDecoder
+from ..registry import register
 
 
 @register("csp_lda")
