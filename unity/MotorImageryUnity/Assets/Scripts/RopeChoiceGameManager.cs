@@ -706,6 +706,7 @@ public class RopeChoiceGameManager : MonoBehaviour
 
     private void ConfigureCharacterDropdown()
     {
+        EnsureDropdownTemplate(characterDropdown);
         characterDropdown.ClearOptions();
         characterDropdown.AddOptions(new List<string> { "Circle", "Car", "Flower" });
         characterDropdown.value = (int)selectedCharacter;
@@ -716,6 +717,94 @@ public class RopeChoiceGameManager : MonoBehaviour
     {
         selectedCharacter = (CharacterKind)Mathf.Clamp(value, 0, 2);
         EnsureCharacter();
+    }
+
+    private static void EnsureDropdownTemplate(Dropdown dropdown)
+    {
+        if (dropdown == null || (dropdown.template != null && dropdown.itemText != null))
+        {
+            return;
+        }
+
+        RectTransform root = dropdown.GetComponent<RectTransform>();
+        RectTransform template = FindOrCreateRect(dropdown.transform, "Template");
+        ConfigureRect(template, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -6f), new Vector2(0f, 126f), new Vector2(0.5f, 1f));
+        var templateImage = GetOrAddComponent<Image>(template.gameObject);
+        templateImage.color = new Color(0.04f, 0.05f, 0.08f, 0.96f);
+        var scrollRect = GetOrAddComponent<ScrollRect>(template.gameObject);
+
+        RectTransform viewport = FindOrCreateRect(template, "Viewport");
+        ConfigureRect(viewport, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+        var viewportImage = GetOrAddComponent<Image>(viewport.gameObject);
+        viewportImage.color = new Color(1f, 1f, 1f, 0.04f);
+        var mask = GetOrAddComponent<Mask>(viewport.gameObject);
+        mask.showMaskGraphic = false;
+
+        RectTransform content = FindOrCreateRect(viewport, "Content");
+        ConfigureRect(content, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 1f));
+
+        RectTransform item = FindOrCreateRect(content, "Item");
+        ConfigureRect(item, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -18f), new Vector2(0f, 36f), new Vector2(0.5f, 1f));
+        var itemImage = GetOrAddComponent<Image>(item.gameObject);
+        itemImage.color = new Color(1f, 0.88f, 0.16f, 0.24f);
+        var toggle = GetOrAddComponent<Toggle>(item.gameObject);
+        toggle.targetGraphic = itemImage;
+
+        RectTransform itemLabel = FindOrCreateRect(item, "Item Label");
+        ConfigureRect(itemLabel, Vector2.zero, Vector2.one, new Vector2(18f, 0f), new Vector2(-36f, 0f), new Vector2(0.5f, 0.5f));
+        var itemText = GetOrAddComponent<Text>(itemLabel.gameObject);
+        itemText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        itemText.fontSize = 22;
+        itemText.fontStyle = FontStyle.Bold;
+        itemText.alignment = TextAnchor.MiddleLeft;
+        itemText.color = Color.white;
+        itemText.raycastTarget = false;
+
+        scrollRect.content = content;
+        scrollRect.viewport = viewport;
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+
+        dropdown.template = template;
+        dropdown.itemText = itemText;
+        if (dropdown.captionText == null)
+        {
+            dropdown.captionText = dropdown.GetComponentInChildren<Text>();
+        }
+
+        if (root != null && root.sizeDelta.y > 0f)
+        {
+            template.sizeDelta = new Vector2(template.sizeDelta.x, root.sizeDelta.y * 3f);
+        }
+
+        template.gameObject.SetActive(false);
+    }
+
+    private static RectTransform FindOrCreateRect(Transform parent, string objectName)
+    {
+        Transform existing = parent.Find(objectName);
+        if (existing != null)
+        {
+            return existing.GetComponent<RectTransform>() ?? existing.gameObject.AddComponent<RectTransform>();
+        }
+
+        var go = new GameObject(objectName);
+        go.transform.SetParent(parent, false);
+        return go.AddComponent<RectTransform>();
+    }
+
+    private static void ConfigureRect(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 sizeDelta, Vector2 pivot)
+    {
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.anchoredPosition = anchoredPosition;
+        rect.sizeDelta = sizeDelta;
+        rect.pivot = pivot;
+    }
+
+    private static T GetOrAddComponent<T>(GameObject target) where T : Component
+    {
+        return target.TryGetComponent(out T component) ? component : target.AddComponent<T>();
     }
 
     private void LoadRankingTimes()
