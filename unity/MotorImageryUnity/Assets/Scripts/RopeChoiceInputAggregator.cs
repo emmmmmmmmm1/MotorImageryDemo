@@ -56,11 +56,41 @@ public class RopeChoiceInputAggregator : MonoBehaviour
         }
 
         streams.ProbaReceived += HandleProbaReceived;
+        streams.StatusReceived += HandleStatusMessage;
 
         if (initializeStreamsOnStart)
         {
             streams.Initialize();
             streams.PushCommand("start_realtime");
+        }
+    }
+
+    private void HandleStatusMessage(string message)
+    {
+        if (!message.StartsWith("service_config:"))
+        {
+            return;
+        }
+        string payload = message.Substring("service_config:".Length).Trim();
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (string pair in payload.Split(','))
+        {
+            string[] kv = pair.Split('=');
+            if (kv.Length != 2)
+            {
+                continue;
+            }
+            if (kv[0].Trim() == "realtime_stride_ms"
+                && int.TryParse(kv[1].Trim(),
+                    System.Globalization.NumberStyles.Integer, culture, out int strideMs))
+            {
+                expectedSampleIntervalSeconds = strideMs / 1000.0f;
+                Debug.Log(
+                    $"RopeChoiceInputAggregator: expectedSampleIntervalSeconds " +
+                    $"updated from service_config to {expectedSampleIntervalSeconds:F3}s " +
+                    $"(stride={strideMs}ms)"
+                );
+            }
         }
     }
 
@@ -92,6 +122,7 @@ public class RopeChoiceInputAggregator : MonoBehaviour
         if (streams != null)
         {
             streams.ProbaReceived -= HandleProbaReceived;
+            streams.StatusReceived -= HandleStatusMessage;
         }
     }
 

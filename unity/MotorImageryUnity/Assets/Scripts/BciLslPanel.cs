@@ -44,17 +44,6 @@ public class BciLslPanel : MonoBehaviour
     public RectTransform probaIndicatorThumb;
     public TMP_Text realtimeHintText;
 
-    [Header("Calibration Markers")]
-    public int trialsPerClass = 20;
-    public float cueSeconds = 1.0f;
-    public float motorImagerySeconds = 4.0f;
-    public float restSeconds = 2.0f;
-    public int leftMarker = 0;
-    public int rightMarker = 1;
-    public int restMarker = 99;
-    public bool shuffleCalibrationTrials = true;
-    public int trialShuffleSeed = 1;
-
     private BciLslStreams streams;
     private BciScreenNavigator screenNavigator;
     private BciCalibrationController calibrationController;
@@ -119,15 +108,9 @@ public class BciLslPanel : MonoBehaviour
         calibrationController.restCueColor = restCueColor;
         calibrationController.readyCueColor = readyCueColor;
         calibrationController.realtimeCueColor = realtimeCueColor;
-        calibrationController.trialsPerClass = trialsPerClass;
-        calibrationController.cueSeconds = cueSeconds;
-        calibrationController.motorImagerySeconds = motorImagerySeconds;
-        calibrationController.restSeconds = restSeconds;
-        calibrationController.leftMarker = leftMarker;
-        calibrationController.rightMarker = rightMarker;
-        calibrationController.restMarker = restMarker;
-        calibrationController.shuffleCalibrationTrials = shuffleCalibrationTrials;
-        calibrationController.trialShuffleSeed = trialShuffleSeed;
+        // Timing/marker fields live on BciCalibrationController directly.
+        // Defaults can be tuned via its Inspector; runtime values are
+        // overridden by service_config from the Python service.
     }
 
     private void ConfigureRealtimeController()
