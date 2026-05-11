@@ -1,4 +1,4 @@
-git branch# MotorImageryDemo
+# MotorImageryDemo
 
 A real-time motor imagery brain–computer interface (BCI) demo. Decodes
 left/right hand motor imagery from Emotiv EEG and feeds predictions to a
