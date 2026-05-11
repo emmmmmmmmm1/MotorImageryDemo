@@ -261,8 +261,15 @@ class _FakeEEGReceiver:
 
 class _BadCalibrationEEGReceiver(_FakeEEGReceiver):
     def stop_recording(self) -> tuple[np.ndarray, np.ndarray]:
-        raw = np.array([[0.0, 10000.0], [1.0, -1.0]], dtype=np.float64)
-        ts = np.array([0.0, 1.0], dtype=np.float64)
+        # A 15 Hz oscillation lives in the 8-30 Hz passband, so its
+        # amplitude survives Preprocessor.transform almost unchanged and
+        # reliably trips the amp_exceeded check on the *filtered* signal.
+        fs = 128.0
+        n = 256
+        t = np.arange(n) / fs
+        sig = 10000.0 * np.sin(2 * np.pi * 15.0 * t)
+        raw = np.vstack([sig, -sig]).astype(np.float64)
+        ts = t.astype(np.float64)
         return raw, ts
 
 
@@ -296,8 +303,9 @@ def test_parse_command_extracts_kwargs() -> None:
     assert kw == {}
 
 
-def test_finalize_calibration_rejects_amplitude_outlier() -> None:
+def test_finalize_calibration_rejects_amplitude_outlier(tmp_path: Path) -> None:
     cfg = _test_cfg(trials_per_class=1)
+    cfg["paths"]["data_dir"] = str(tmp_path)
     svc = Service(cfg=cfg)
     status = _RecordingStatusPublisher()
     svc.status_pub = status
@@ -311,6 +319,11 @@ def test_finalize_calibration_rejects_amplitude_outlier() -> None:
     joined = " | ".join(status.messages)
     assert "error:bad_calibration_data:reason=amp_exceeded" in joined
     assert "state:IDLE" in joined
+    # The raw npz must be persisted even though the sanity check failed —
+    # losing the recording is worse than skipping training.
+    assert svc.cal_data_path is not None and svc.cal_data_path.exists()
+    with np.load(svc.cal_data_path) as data:
+        assert data["raw"].shape == (2, 256)
 
 
 def test_load_bundle_command_moves_service_to_ready(tmp_path: Path) -> None:
