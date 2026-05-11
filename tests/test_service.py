@@ -53,8 +53,6 @@ def _test_cfg(trials_per_class: int = 2) -> dict:
             "eeg_stream_type": "EEG",
             "markers_stream": "Markers",
             "commands_stream": "Commands",
-            "status_stream": "Status",
-            "proba_stream": "BCI_Proba",
             "stall_timeout_s": 2.0,
             "emotiv": {
                 "channel_offset": 3,
@@ -73,9 +71,6 @@ def _test_cfg(trials_per_class: int = 2) -> dict:
             "cue_s": 0.2,
             "mi_s": 1.5,
             "rest_s": 0.4,
-            "marker_left": 0,
-            "marker_right": 1,
-            "marker_rest": 99,
             "sanity": {"max_abs_uv": 5000.0, "nan_inf_check": True},
         },
         "windowing": {
@@ -98,10 +93,10 @@ def _test_cfg(trials_per_class: int = 2) -> dict:
     }
 
 
-def _make_eeg_outlet(source_id: str) -> StreamOutlet:
+def _make_eeg_outlet(source_id: str, stream_type: str = "EEG") -> StreamOutlet:
     info = StreamInfo(
         name=f"SvcTestEEG_{source_id}",
-        type="EEG",
+        type=stream_type,
         channel_count=TOTAL_CHANNELS,
         nominal_srate=FS,
         channel_format="float32",
@@ -406,15 +401,20 @@ def test_realtime_stall_returns_to_ready() -> None:
 
 def test_service_full_lifecycle(tmp_path: pytest.TempPathFactory) -> None:
     cfg = _test_cfg(trials_per_class=2)
+    cfg["lsl"]["eeg_stream_type"] = "SvcTestEEG_lifecycle"
+    cfg["lsl"]["markers_stream"] = "SvcTestMarkers_lifecycle"
+    cfg["lsl"]["commands_stream"] = "SvcTestCommands_lifecycle"
     cfg["paths"] = {
         "bundles_dir": str(tmp_path / "bundles"),
         "data_dir": str(tmp_path / "data"),
         "logs_dir": str(tmp_path / "logs"),
     }
 
-    eeg_out = _make_eeg_outlet("svc_lifecycle")
-    marker_out = _make_int_outlet("Markers", "svc_marker")
-    cmd_out = _make_string_outlet("Commands", "svc_cmd")
+    eeg_out = _make_eeg_outlet(
+        "svc_lifecycle", stream_type=cfg["lsl"]["eeg_stream_type"]
+    )
+    marker_out = _make_int_outlet(cfg["lsl"]["markers_stream"], "svc_marker")
+    cmd_out = _make_string_outlet(cfg["lsl"]["commands_stream"], "svc_cmd")
 
     # Wait so receivers can resolve.
     time.sleep(0.5)

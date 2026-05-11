@@ -21,6 +21,9 @@ public class BciLslStreams : MonoBehaviour
     private string lastStatusMessage = "";
     private float nextResolveAt;
     private bool initialized;
+    // True once we've sent query_config for the currently open status inlet.
+    // Reset when the inlet drops so we re-query on reconnect.
+    private bool queriedConfigForCurrentInlet;
 
     private const float ResolveIntervalSeconds = 1.0f;
 
@@ -75,6 +78,17 @@ public class BciLslStreams : MonoBehaviour
         {
             TryResolveInlets();
             nextResolveAt = Time.time + ResolveIntervalSeconds;
+        }
+
+        // Ask the service for its config the moment we can both receive
+        // its replies (status inlet) and send commands (outlet). This
+        // gives Unity a fresh snapshot at connect time without manual
+        // sync. On reconnect (statusInlet goes null after a LostException
+        // and is later re-resolved), we re-query.
+        if (!queriedConfigForCurrentInlet && statusInlet != null && commandOutlet != null)
+        {
+            PushCommand("query_config");
+            queriedConfigForCurrentInlet = true;
         }
 
         PullStatus();
@@ -173,6 +187,7 @@ public class BciLslStreams : MonoBehaviour
             Debug.LogWarning("Status stream lost; will try to reconnect.");
             statusInlet.close_stream();
             statusInlet = null;
+            queriedConfigForCurrentInlet = false;
         }
     }
 

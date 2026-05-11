@@ -2,8 +2,9 @@ lsl:
   eeg_stream_type: "EEG"
   markers_stream: "Markers"
   commands_stream: "Commands"
-  status_stream: "Status"
-  proba_stream: "BCI_Proba"
+  # Status and BCI_Proba stream types are hardcoded in bci/lsl_io.py
+  # (StatusPublisher, ProbaPublisher) and BciLslStreams.cs on the Unity
+  # side; no config knob is exposed.
   emotiv:
     channel_offset: 3
     # Only EPOC X (19-channel total stream, 14 EEG) is supported.
@@ -25,13 +26,12 @@ preprocessing:
   reference: auto              # auto | car | none
 
 calibration:
-  trials_per_class: 20
+  trials_per_class: 5
   cue_s: 1.0
   mi_s: 4.0
   rest_s: 2.0
-  marker_left: 0
-  marker_right: 1
-  marker_rest: 99
+  # Marker integers are hardcoded throughout (0=left, 1=right, 99=rest)
+  # in both bci/epoching.py and Unity. No config knob is exposed.
   sanity:
     max_abs_uv: 500.0
     nan_inf_check: true

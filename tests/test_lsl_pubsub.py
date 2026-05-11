@@ -21,10 +21,10 @@ from bci.lsl_io import (
 )
 
 
-def _make_marker_outlet(source_id: str) -> StreamOutlet:
+def _make_marker_outlet(source_id: str, stream_type: str = "Markers") -> StreamOutlet:
     info = StreamInfo(
         name=f"TestMarkers_{source_id}",
-        type="Markers",
+        type=stream_type,
         channel_count=1,
         nominal_srate=0.0,
         channel_format="int32",
@@ -33,10 +33,10 @@ def _make_marker_outlet(source_id: str) -> StreamOutlet:
     return StreamOutlet(info)
 
 
-def _make_command_outlet(source_id: str) -> StreamOutlet:
+def _make_command_outlet(source_id: str, stream_type: str = "Commands") -> StreamOutlet:
     info = StreamInfo(
         name=f"TestCommands_{source_id}",
-        type="Commands",
+        type=stream_type,
         channel_count=1,
         nominal_srate=0.0,
         channel_format="string",
@@ -46,9 +46,10 @@ def _make_command_outlet(source_id: str) -> StreamOutlet:
 
 
 def test_marker_receiver_pulls_pairs() -> None:
-    outlet = _make_marker_outlet("mark_basic")
+    stream_type = "TestMarkers_mark_basic"
+    outlet = _make_marker_outlet("mark_basic", stream_type=stream_type)
     try:
-        rx = MarkerReceiver()
+        rx = MarkerReceiver(stream_type=stream_type)
         rx.connect()
         time.sleep(0.3)
         t0 = local_clock()
@@ -70,9 +71,10 @@ def test_marker_receiver_pulls_pairs() -> None:
 
 
 def test_command_receiver_pulls_strings() -> None:
-    outlet = _make_command_outlet("cmd_basic")
+    stream_type = "TestCommands_cmd_basic"
+    outlet = _make_command_outlet("cmd_basic", stream_type=stream_type)
     try:
-        rx = CommandReceiver()
+        rx = CommandReceiver(stream_type=stream_type)
         rx.connect()
         time.sleep(0.3)
         outlet.push_sample(["start_calibration:subject=A"])
@@ -92,22 +94,23 @@ def test_eeg_marker_clock_sync_within_50ms() -> None:
     correction (this is far above the typical sub-ms loopback skew)."""
     eeg_info = StreamInfo(
         name="TestSyncEEG",
-        type="EEG",
+        type="TestSyncEEG",
         channel_count=1,
         nominal_srate=128.0,
         channel_format="float32",
         source_id="sync_eeg",
     )
     eeg_outlet = StreamOutlet(eeg_info)
-    marker_outlet = _make_marker_outlet("sync_mark")
+    marker_type = "TestMarkers_sync_mark"
+    marker_outlet = _make_marker_outlet("sync_mark", stream_type=marker_type)
 
-    eeg_streams = resolve_byprop("type", "EEG", timeout=5.0)
+    eeg_streams = resolve_byprop("type", "TestSyncEEG", timeout=5.0)
     eeg_inlet = StreamInlet(
         next(s for s in eeg_streams if s.source_id() == "sync_eeg")
     )
     eeg_inlet.open_stream(timeout=2.0)
 
-    rx_marker = MarkerReceiver()
+    rx_marker = MarkerReceiver(stream_type=marker_type)
     rx_marker.connect()
     time.sleep(0.3)
     try:

@@ -237,6 +237,8 @@ class Service:
                 self._cmd_start_realtime()
             elif name == "stop_realtime":
                 self._cmd_stop_realtime()
+            elif name == "query_config":
+                self._publish_service_config()
             else:
                 logger.warning("unknown command: %s", raw_cmd)
                 self._push_status(f"error:unknown_command:{name}")
@@ -267,6 +269,11 @@ class Service:
         self.eeg_rx.start_recording()
         self.state = State.CALIBRATING
         self._publish_state()
+        # Re-publish service_config so Unity (or any client that joined
+        # late) has up-to-date timing parameters before the marker loop
+        # starts. Idempotent ? same payload as the connect-time response
+        # to query_config.
+        self._publish_service_config()
         self._push_status(
             f"calibration_progress:0/{self.cal_expected_cues}"
         )
@@ -589,6 +596,26 @@ class Service:
 
     def _publish_state(self) -> None:
         self._push_status(f"state:{self.state.value}")
+
+    def _publish_service_config(self) -> None:
+        """Broadcast the timing parameters Unity needs.
+
+        Sent in response to a ``query_config`` command (Unity issues this
+        as soon as its Status inlet is up) and re-sent on
+        ``start_calibration`` so late joiners stay in sync. Single source
+        of truth is the YAML loaded by the service.
+        """
+        cal = self.cfg["calibration"]
+        win = self.cfg["windowing"]
+        self._push_status(
+            "service_config:"
+            f"cue_s={float(cal['cue_s'])},"
+            f"mi_s={float(cal['mi_s'])},"
+            f"rest_s={float(cal['rest_s'])},"
+            f"trials_per_class={int(cal['trials_per_class'])},"
+            f"realtime_stride_ms={int(win['realtime_stride_ms'])},"
+            f"window_s={float(win['window_s'])}"
+        )
 
     def _tick_state_heartbeat(self) -> None:
         now = time.time()

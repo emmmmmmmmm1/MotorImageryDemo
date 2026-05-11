@@ -26,10 +26,14 @@ EPOCX_LABELS: tuple[str, ...] = (
 )
 
 
+def _stream_type(source_id: str) -> str:
+    return f"TestEEG_{source_id}"
+
+
 def _make_epocx_outlet(source_id: str) -> StreamOutlet:
     info = StreamInfo(
         name=f"TestEpocX_{source_id}",
-        type="EEG",
+        type=_stream_type(source_id),
         channel_count=TOTAL_CHANNELS,
         nominal_srate=FS,
         channel_format="float32",
@@ -71,7 +75,7 @@ def _drain_outlet(outlet: StreamOutlet) -> None:
 def test_connect_parses_epocx_layout() -> None:
     outlet = _make_epocx_outlet(source_id="conn_full")
     try:
-        rx = EEGReceiver(stream_type="EEG", capacity_seconds=2.0)
+        rx = EEGReceiver(stream_type=_stream_type("conn_full"), capacity_seconds=2.0)
         info = rx.connect()
         assert info["n_channels"] == 14
         assert info["total_channels"] == TOTAL_CHANNELS
@@ -87,7 +91,7 @@ def test_connect_parses_epocx_layout() -> None:
 def test_streaming_fills_raw_buffer_full_14ch() -> None:
     outlet = _make_epocx_outlet(source_id="raw_full")
     try:
-        rx = EEGReceiver(stream_type="EEG", capacity_seconds=2.0)
+        rx = EEGReceiver(stream_type=_stream_type("raw_full"), capacity_seconds=2.0)
         rx.connect()
         rx.start_streaming()
         try:
@@ -111,7 +115,7 @@ def test_channel_selection_subset_two_channels() -> None:
     outlet = _make_epocx_outlet(source_id="raw_sel")
     try:
         rx = EEGReceiver(
-            stream_type="EEG",
+            stream_type=_stream_type("raw_sel"),
             capacity_seconds=2.0,
             channel_selection=["FC5", "FC6"],
         )
@@ -144,7 +148,7 @@ def test_channel_selection_unknown_channel_raises() -> None:
     outlet = _make_epocx_outlet(source_id="bad_sel")
     try:
         rx = EEGReceiver(
-            stream_type="EEG",
+            stream_type=_stream_type("bad_sel"),
             channel_selection=["AF3", "DOES_NOT_EXIST"],
         )
         with pytest.raises(RuntimeError, match="not in stream EEG labels"):
@@ -156,7 +160,7 @@ def test_channel_selection_unknown_channel_raises() -> None:
 def test_attached_preprocessor_filters_into_filtered_buffer() -> None:
     outlet = _make_epocx_outlet(source_id="filt_full")
     try:
-        rx = EEGReceiver(stream_type="EEG", capacity_seconds=3.0)
+        rx = EEGReceiver(stream_type=_stream_type("filt_full"), capacity_seconds=3.0)
         rx.connect()
         cfg = PreprocessingConfig(
             fs=FS, channel_order=list(EPOCX_LABELS)
@@ -183,7 +187,7 @@ def test_attached_preprocessor_filters_into_filtered_buffer() -> None:
 def test_recording_returns_concatenated_raw_and_timestamps() -> None:
     outlet = _make_epocx_outlet(source_id="rec_full")
     try:
-        rx = EEGReceiver(stream_type="EEG", capacity_seconds=4.0)
+        rx = EEGReceiver(stream_type=_stream_type("rec_full"), capacity_seconds=4.0)
         rx.connect()
         rx.start_streaming()
         try:
@@ -209,7 +213,9 @@ def test_is_stalled_flips_when_outlet_stops() -> None:
     outlet = _make_epocx_outlet(source_id="stall_full")
     try:
         rx = EEGReceiver(
-            stream_type="EEG", capacity_seconds=2.0, stall_timeout_s=0.5
+            stream_type=_stream_type("stall_full"),
+            capacity_seconds=2.0,
+            stall_timeout_s=0.5,
         )
         rx.connect()
         rx.start_streaming()
@@ -231,7 +237,7 @@ def test_is_stalled_flips_when_outlet_stops() -> None:
 def test_unexpected_emotiv_layout_raises() -> None:
     info = StreamInfo(
         name="WeirdEmotiv",
-        type="EEG",
+        type=_stream_type("weird_emotiv"),
         channel_count=11,  # only 19 (EPOC X) is supported
         nominal_srate=FS,
         channel_format="float32",
@@ -244,7 +250,7 @@ def test_unexpected_emotiv_layout_raises() -> None:
         ch.append_child_value("label", f"ch{i}")
     outlet = StreamOutlet(info)
     try:
-        rx = EEGReceiver(stream_type="EEG")
+        rx = EEGReceiver(stream_type=_stream_type("weird_emotiv"))
         with pytest.raises(RuntimeError, match="unexpected channel_count"):
             rx.connect()
     finally:

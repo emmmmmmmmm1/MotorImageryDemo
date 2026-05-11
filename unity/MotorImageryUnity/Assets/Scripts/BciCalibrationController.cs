@@ -32,13 +32,18 @@ public class BciCalibrationController : MonoBehaviour
     public int restMarker = 99;
     public bool shuffleCalibrationTrials = true;
     public int trialShuffleSeed = 1;
+    // How long to wait for the service to broadcast its service_config
+    // before falling back to the Inspector defaults above.
+    public float serviceConfigWaitSeconds = 3.0f;
 
     private BciLslStreams streams;
     private string serviceState = "";
     private string currentSubjectId = "pc2_test";
+    private int calibrationProgressCurrent;
     private int calibrationProgressTotal = 40;
     private Coroutine calibrationRoutine;
     private bool initialized;
+    private bool serviceConfigReceived;
 
     private const float FallbackCalibrationTrackWidth = 420.0f;
 
@@ -140,6 +145,27 @@ public class BciCalibrationController : MonoBehaviour
 
     private IEnumerator PublishCalibrationMarkers()
     {
+        // Normally service_config arrived at connect time, long before
+        // Start was clicked. This wait is just a safety net for the case
+        // where calibration is triggered before the service has answered
+        // our initial query_config (e.g. service restarted mid-session).
+        // Falls back to Inspector defaults on timeout rather than
+        // deadlocking the calibration flow.
+        float waitStart = Time.realtimeSinceStartup;
+        while (!serviceConfigReceived
+               && Time.realtimeSinceStartup - waitStart < serviceConfigWaitSeconds)
+        {
+            yield return null;
+        }
+        if (!serviceConfigReceived)
+        {
+            Debug.LogWarning(
+                $"service_config not received within {serviceConfigWaitSeconds}s; " +
+                $"using Inspector defaults (cue={cueSeconds}s, mi={motorImagerySeconds}s, " +
+                $"rest={restSeconds}s, trials/class={trialsPerClass})."
+            );
+        }
+
         var labels = BuildCalibrationLabels();
         Debug.Log($"Calibration marker sequence started: {labels.Count} cue markers");
 
@@ -148,9 +174,21 @@ public class BciCalibrationController : MonoBehaviour
         for (int index = 0; index < labels.Count; index++)
         {
             int label = labels[index];
+
+            // Cue phase: show LEFT/RIGHT. Subject starts imagining as soon as
+            // the cue appears; this first cueSeconds window is intentionally
+            // dropped from the training data (warmup) by withholding the
+            // marker until MI onset. The display does not change at the
+            // boundary ? only the LSL marker draws it.
             SetCueForMarker(label);
+            Debug.Log($"Calibration trial {index + 1}/{labels.Count} cue: marker={label}");
+
+            yield return new WaitForSecondsRealtime(cueSeconds);
+
+            // MI phase: marker timestamp = MI onset = start of the slice used
+            // for training. Screen stays on LEFT/RIGHT.
             streams?.PushMarker(label);
-            Debug.Log($"Calibration cue {index + 1}/{labels.Count}: marker={label}");
+            Debug.Log($"Calibration trial {index + 1}/{labels.Count} MI onset: marker={label}");
 
             yield return new WaitForSecondsRealtime(motorImagerySeconds);
 
@@ -158,7 +196,7 @@ public class BciCalibrationController : MonoBehaviour
             streams?.PushMarker(restMarker);
             Debug.Log($"Calibration rest marker={restMarker}");
 
-            yield return new WaitForSecondsRealtime(restSeconds + cueSeconds);
+            yield return new WaitForSecondsRealtime(restSeconds);
         }
 
         Debug.Log("Calibration marker sequence complete.");
@@ -212,6 +250,10 @@ public class BciCalibrationController : MonoBehaviour
             }
             UpdateControlInteractivity();
         }
+        else if (message.StartsWith("service_config:"))
+        {
+            ParseServiceConfig(message);
+        }
         else if (message.StartsWith("calibration_progress:"))
         {
             SetWarningText("");
@@ -258,6 +300,57 @@ public class BciCalibrationController : MonoBehaviour
         }
     }
 
+    private void ParseServiceConfig(string message)
+    {
+        string payload = message.Substring("service_config:".Length).Trim();
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (string pair in payload.Split(','))
+        {
+            string[] kv = pair.Split('=');
+            if (kv.Length != 2)
+            {
+                continue;
+            }
+            string key = kv[0].Trim();
+            string value = kv[1].Trim();
+            switch (key)
+            {
+                case "cue_s":
+                    if (float.TryParse(value, System.Globalization.NumberStyles.Float, culture, out float cs))
+                    {
+                        cueSeconds = cs;
+                    }
+                    break;
+                case "mi_s":
+                    if (float.TryParse(value, System.Globalization.NumberStyles.Float, culture, out float mis))
+                    {
+                        motorImagerySeconds = mis;
+                    }
+                    break;
+                case "rest_s":
+                    if (float.TryParse(value, System.Globalization.NumberStyles.Float, culture, out float rs))
+                    {
+                        restSeconds = rs;
+                    }
+                    break;
+                case "trials_per_class":
+                    if (int.TryParse(value, System.Globalization.NumberStyles.Integer, culture, out int tpc))
+                    {
+                        trialsPerClass = tpc;
+                    }
+                    break;
+                // Other keys (realtime_stride_ms, window_s) are consumed
+                // by RopeChoiceInputAggregator. Ignore here.
+            }
+        }
+        serviceConfigReceived = true;
+        UpdateCalibrationProgress(calibrationProgressCurrent, trialsPerClass * 2);
+        Debug.Log(
+            $"Received service_config: cue={cueSeconds}s mi={motorImagerySeconds}s " +
+            $"rest={restSeconds}s trials/class={trialsPerClass}"
+        );
+    }
+
     private bool TryParseCalibrationProgress(string message, out int current, out int total)
     {
         current = 0;
@@ -278,6 +371,7 @@ public class BciCalibrationController : MonoBehaviour
     {
         int safeTotal = Mathf.Max(1, total);
         int safeCurrent = Mathf.Clamp(current, 0, safeTotal);
+        calibrationProgressCurrent = safeCurrent;
         calibrationProgressTotal = safeTotal;
         float ratio = Mathf.Clamp01((float)safeCurrent / safeTotal);
 
