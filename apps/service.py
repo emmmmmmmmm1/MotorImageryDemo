@@ -327,12 +327,38 @@ class Service:
             ts.shape,
         )
 
-        if not self._sanity_check(raw):
+        # Persist the recording unconditionally — the raw EEG is the
+        # ground-truth artefact and must survive even when downstream
+        # filtering or training fails. Sanity checks are intentionally
+        # NOT applied to raw data: pre-filter EEG carries large DC
+        # offsets that would mask a meaningful amplitude threshold.
+        self._save_calibration_npz(raw, ts)
+
+        pre = Preprocessor(self.preprocessing)
+        filtered = pre.transform(raw)
+        if not self._sanity_check(filtered):
             self.state = State.IDLE
             self._publish_state()
             return
 
-        # Persist raw npz
+        self.state = State.TRAINING
+        self._publish_state()
+
+        try:
+            cv_acc = self._fit_decoder(filtered, ts)
+        except Exception as exc:
+            logger.exception("training failed: %s", exc)
+            self._push_status(f"error:training_failed:{exc}")
+            self.state = State.IDLE
+            self._publish_state()
+            return
+
+        self._push_status(f"calibration_done:acc={cv_acc:.3f}")
+        self.state = State.READY
+        self._publish_state()
+
+    def _save_calibration_npz(self, raw: np.ndarray, ts: np.ndarray) -> None:
+        assert self.preprocessing is not None
         ts_label = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.cal_data_path = (
             REPO_ROOT
@@ -353,31 +379,16 @@ class Service:
             fs=self.preprocessing.fs,
             channel_order=np.array(self.preprocessing.channel_order),
         )
+        self._push_status(f"calibration_saved:path={self.cal_data_path}")
 
-        self.state = State.TRAINING
-        self._publish_state()
-
-        try:
-            cv_acc = self._fit_decoder(raw, ts)
-        except Exception as exc:
-            logger.exception("training failed: %s", exc)
-            self._push_status(f"error:training_failed:{exc}")
-            self.state = State.IDLE
-            self._publish_state()
-            return
-
-        self._push_status(f"calibration_done:acc={cv_acc:.3f}")
-        self.state = State.READY
-        self._publish_state()
-
-    def _sanity_check(self, raw: np.ndarray) -> bool:
-        if raw.size == 0 or raw.shape[1] == 0:
+    def _sanity_check(self, data: np.ndarray) -> bool:
+        if data.size == 0 or data.shape[1] == 0:
             self._push_status("error:bad_calibration_data:reason=empty")
             return False
-        if self.sanity_nan_inf and not np.isfinite(raw).all():
+        if self.sanity_nan_inf and not np.isfinite(data).all():
             self._push_status("error:bad_calibration_data:reason=non_finite")
             return False
-        max_abs = float(np.abs(raw).max())
+        max_abs = float(np.abs(data).max())
         if max_abs > self.sanity_max_abs_uv:
             self._push_status(
                 f"error:bad_calibration_data:reason=amp_exceeded:peak={max_abs:.1f}"
@@ -385,10 +396,10 @@ class Service:
             return False
         return True
 
-    def _fit_decoder(self, raw: np.ndarray, timestamps: np.ndarray) -> float:
+    def _fit_decoder(
+        self, filtered: np.ndarray, timestamps: np.ndarray
+    ) -> float:
         assert self.preprocessing is not None
-        pre = Preprocessor(self.preprocessing)
-        filtered = pre.transform(raw)
         trials, labels = extract_trials(
             filtered,
             timestamps,
