@@ -10,6 +10,8 @@ dependencies:
   - joblib
   - pyyaml
   - pytest
+  - moabb
+  - pyriemann
   - pip
   - pip:
       - pylsl
