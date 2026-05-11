@@ -31,6 +31,14 @@ public static class RopeChoiceMotorImagerySceneSetup
         var roundText = CreateText(hudPanel.transform, "Round Text", "Stage 1 / 8", 28, FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -34f), new Vector2(-24f, 38f), Color.white);
         var smoothText = CreateText(hudPanel.transform, "Smooth Choices Text", "Smooth 0 / 8", 22, FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -78f), new Vector2(-24f, 32f), new Color(1f, 0.88f, 0.16f));
         var statusText = CreateText(hudPanel.transform, "Status Text", "Waiting", 21, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -114f), new Vector2(-24f, 30f), Color.white);
+        var backButton = CreateButton(canvas.transform, "Back Button", "BACK", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(180f, -56f), new Vector2(210f, 58f));
+        var backLoader = backButton.GetComponent<LoadSceneButton>();
+        if (backLoader == null)
+        {
+            backLoader = backButton.gameObject.AddComponent<LoadSceneButton>();
+        }
+
+        SetSerializedString(backLoader, "sceneName", "MainMenu");
 
         var startPanel = CreatePanel(canvas.transform, "Start Panel", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(620f, 460f), new Color(0.02f, 0.04f, 0.08f, 0.92f));
         CreatePanel(startPanel.transform, "Top Accent", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), new Vector2(0f, 8f), new Color(1f, 0.88f, 0.16f, 1f));
@@ -95,14 +103,18 @@ public static class RopeChoiceMotorImagerySceneSetup
     public static void AddGameStartButtonToMainMenu()
     {
         var scene = EditorSceneManager.OpenScene(MainMenuScenePath, OpenSceneMode.Single);
-        var calibrationPanel = GameObject.Find("CalibrationPanel");
-        if (calibrationPanel == null)
+        var mainMenuPanel = GameObject.Find("MainMenuPanel");
+        if (mainMenuPanel == null)
         {
-            Debug.LogWarning("CalibrationPanel was not found in MainMenu.");
+            Debug.LogWarning("MainMenuPanel was not found in MainMenu.");
             return;
         }
 
-        var button = CreateTmpButton(calibrationPanel.transform, "GameStartButton", "GAME START", new Vector2(268f, -325f), new Vector2(210f, 48f));
+        SetMainMenuButton(mainMenuPanel.transform, "MenuCalibrationButton", "Calibration", new Vector2(0f, 55f));
+        SetMainMenuButton(mainMenuPanel.transform, "MenuRealtimeButton", "RealTime", new Vector2(0f, -15f));
+        SetMainMenuButton(mainMenuPanel.transform, "ShutdownButton", "Shutdown", new Vector2(0f, -155f));
+
+        var button = CreateTmpButton(mainMenuPanel.transform, "GameStartButton", "GAME", new Vector2(0f, -85f), new Vector2(190f, 52f));
         var loader = button.GetComponent<LoadSceneButton>();
         if (loader == null)
         {
@@ -114,7 +126,7 @@ public static class RopeChoiceMotorImagerySceneSetup
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
-        Debug.Log("Added GAME START button to MainMenu CalibrationPanel.");
+        Debug.Log("Updated MainMenu button layout and GAME button.");
     }
 
     [MenuItem("Motor Imagery/Rope Choice/Setup All")]
@@ -330,6 +342,28 @@ public static class RopeChoiceMotorImagerySceneSetup
         label.color = new Color(0.04f, 0.05f, 0.08f);
         label.raycastTarget = false;
         return button;
+    }
+
+    private static void SetMainMenuButton(Transform parent, string objectName, string labelText, Vector2 anchoredPosition)
+    {
+        var child = parent.Find(objectName);
+        if (child == null)
+        {
+            return;
+        }
+
+        var rect = child.GetComponent<RectTransform>();
+        if (rect != null)
+        {
+            rect.anchoredPosition = anchoredPosition;
+            rect.sizeDelta = new Vector2(190f, 52f);
+        }
+
+        var label = child.GetComponentInChildren<TMP_Text>();
+        if (label != null)
+        {
+            label.text = labelText;
+        }
     }
 
     private static GameObject FindOrCreateChild(Transform parent, string objectName)
